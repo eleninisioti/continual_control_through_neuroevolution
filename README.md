@@ -10,17 +10,17 @@ We provide the library dependenices in the file [requirements.txt](requirements.
 You can create a virtual environment and install them using [uv](https://docs.astral.sh/uv/) with the following commands:
 
 ```
-uv venv --python 3.12.0
+uv venv --python 3.12.9
 uv pip install -r requirements.txt
 ```
 
 
-## Rpository overview
+## Repository overview
 This repo contains the following directories:
-* [methods](methods) contains the implementation of the methods we have benchmarked. (While we have employed existing libraries we have made internal changes to support curriculum learning and logging):
+* [methods](methods) contains the implementation of the methods we have benchmarked (evolution and RL)
   * [brax](methods/RL) contains the implementation of PPO  (extending [Brax](https://github.com/google/brax/tree/main/brax))
-  * [neuroevolution](methods/evosax_wrapper) contains the implementation of CMA-ES (this is a general framework for training direct encodings using [evosax](https://github.com/RobertTLange/evosax))
-  * [neuroevolution](methods/kinetix) contains the implementation of PPO Transformer that the original work employed [kinetix ](https://kinetix-env.github.io/))
+  * [neuroevolution](methods/evosax_wrapper) contains the implementation of SimpleGA and OpenES (extending [evosax](https://github.com/RobertTLange/evosax))
+  * [kinetix](methods/kinetix) contains the implementation of PPO Transformer that the original work employed [kinetix ](https://kinetix-env.github.io/))
 
 
 * [scripts](scripts) contains:
