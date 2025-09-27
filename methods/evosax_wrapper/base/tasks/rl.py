@@ -6,10 +6,7 @@ import jax.random as jr
 import equinox as eqx
 # from stepping_gates import envs as gate_envs
 #from simple import envs as simple_envs
-from brax import envs as brax_envs
-from ecorobot import envs as ecorobot_envs
-from brax.envs import Env
-#from brax import envs as brax_envs
+
 from jaxtyping import Float, PyTree
 import gymnax
 from craftax.craftax.envs.craftax_symbolic_env import CraftaxSymbolicEnvNoAutoReset
@@ -28,12 +25,10 @@ TaskParams: TypeAlias = PyTree
 EnvState: TypeAlias = PyTree
 Action: TypeAlias = jax.Array
 PolicyState: TypeAlias = PyTree
-BraxEnv: TypeAlias = Env
 
 class State(NamedTuple):
 	env_state: EnvState
 	policy_state: PolicyState
-	#action: jnp.array
 
 
 class GymnaxState(NamedTuple):
@@ -57,7 +52,7 @@ class CraftaxTask(eqx.Module):
 	"""
 	"""
 	#-------------------------------------------------------------------
-	env: BraxEnv
+	env: PyTree
 	statics: PyTree[...]
 	max_steps: int	
 	num_tasks: int
@@ -72,7 +67,7 @@ class CraftaxTask(eqx.Module):
 	def __init__(
 		self, 
 		statics: PyTree[...],
-		env: Union[str, BraxEnv],
+		env: Union[str, PyTree],
 		max_steps: int,
 		obs_size: int,
 		action_size: int,
@@ -190,7 +185,7 @@ class GymnaxTaskWithPerturbation(eqx.Module):
     """
     """
     #-------------------------------------------------------------------
-    env: BraxEnv
+    env: PyTree
     statics: PyTree[...]
     max_steps: int	
     num_tasks: int
@@ -207,7 +202,7 @@ class GymnaxTaskWithPerturbation(eqx.Module):
     def __init__(
         self, 
         statics: PyTree[...],
-        env: Union[str, BraxEnv],
+        env: Union[str, PyTree],
         max_steps: int,
         obs_size: int,
         action_size: int,
@@ -338,7 +333,7 @@ class GymnaxTask(eqx.Module):
 	"""
 	"""
 	#-------------------------------------------------------------------
-	env: BraxEnv
+	env: PyTree
 	statics: PyTree[...]
 	max_steps: int	
 	num_tasks: int
@@ -351,7 +346,7 @@ class GymnaxTask(eqx.Module):
 	def __init__(
 		self, 
 		statics: PyTree[...],
-		env: Union[str, BraxEnv],
+		env: Union[str, PyTree],
 		max_steps: int,
 		backend: str="mjx",
 		data_fn: Callable=lambda x: x, 
@@ -448,12 +443,12 @@ class MinatarMultiTask(eqx.Module):
 	rollout_calls:  int
 	obs_size: int
 	action_size: int
-	env: BraxEnv
+	env: PyTree
  
 	def __init__(
 		self, 
 		statics: PyTree[...],
-		env: Union[str, BraxEnv],
+		env: Union[str, PyTree],
 		max_steps: int,
 		obs_size: int,
 		action_size: int,
@@ -519,7 +514,7 @@ class KinetixTask(eqx.Module):
     """
     """
     #-------------------------------------------------------------------
-    env: BraxEnv
+    env: PyTree
     statics: PyTree[...]
     max_steps: int    
     num_tasks: int
@@ -535,7 +530,7 @@ class KinetixTask(eqx.Module):
     def __init__(
         self, 
         statics: PyTree[...],
-        env: Union[str, BraxEnv],
+        env: Union[str, PyTree],
         max_steps: int,
         backend: str="mjx",
         data_fn: Callable=lambda x: x, 
@@ -651,7 +646,7 @@ class EcorobotTask(eqx.Module):
     """
     """
     #-------------------------------------------------------------------
-    env: BraxEnv
+    env: PyTree
     statics: PyTree[...]
     max_steps: int    
     num_tasks: int
@@ -666,7 +661,7 @@ class EcorobotTask(eqx.Module):
     def __init__(
         self, 
         statics: PyTree[...],
-        env: Union[str, BraxEnv],
+        env: Union[str, PyTree],
         max_steps: int,
         backend: str="mjx",
         data_fn: Callable=lambda x: x, 
@@ -752,7 +747,7 @@ class BraxTask(eqx.Module):
     """
     """
     #-------------------------------------------------------------------
-    env: BraxEnv
+    env: PyTree
     statics: PyTree[...]
     max_steps: int
 
@@ -766,7 +761,7 @@ class BraxTask(eqx.Module):
     def __init__(
         self, 
         statics: PyTree[...],
-        env: Union[str, BraxEnv],
+        env: Union[str, PyTree],
         max_steps: int,
         backend: str="positional",
         data_fn: Callable=lambda x: x, 
@@ -855,7 +850,7 @@ class GatesTask(eqx.Module):
 	"""
 	"""
 	# -------------------------------------------------------------------
-	env: BraxEnv
+	env: PyTree
 	statics: PyTree[...]
 	max_steps: int
 	num_tasks: int
@@ -868,7 +863,7 @@ class GatesTask(eqx.Module):
 	def __init__(
 			self,
 			statics: PyTree[...],
-			env: Union[str, BraxEnv],
+			env: Union[str, PyTree],
 			max_steps: int,
 			data_fn: Callable = lambda x: x,
 			env_kwargs: dict = {}):

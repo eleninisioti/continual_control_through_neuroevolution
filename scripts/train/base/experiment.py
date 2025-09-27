@@ -2,16 +2,12 @@ from datetime import datetime
 import os
 import jax.random
 import yaml
-import envs
 import copy
-import envs
 import pickle
 import numpy as onp
 import subprocess
 import wandb
 import matplotlib.pyplot as plt
-from stepping_gates import envs as stepping_gates_envs
-from brax import envs as brax_envs
 import shutil
 import equinox as eqx
 import  gymnasium as gym

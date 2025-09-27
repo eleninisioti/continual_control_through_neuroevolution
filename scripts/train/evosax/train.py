@@ -2,11 +2,11 @@
 import sys
 import os
 sys.path.append(".")
+sys.path.append("methods/evosax_wrapper/") # to be able to import evosax
 from scripts.train.evosax.train_utils import EvosaxExperiment as Experiment
 import os
-import envs
 from scripts.train.base.utils import default_env_params
-from scripts.train.evosax.simplega.hyperparams import train_gens, hyperparams
+from scripts.train.evosax.hyperparams import train_gens, hyperparams
 import argparse
 
 
@@ -19,15 +19,13 @@ def train_gymnax(num_trials, env_name, population_size, noise_range, optimizer):
     
     # configure environment
     env_params = default_env_params[env_name]
-    if continual:
-        env_params["noise_range"] = noise_range
-    else:
-        env_params["noise_range"] = 0.0
+    env_params["noise_range"] = noise_range
+
     env_config = {"env_type": "gymnax",
                   "env_name": env_name,
                   "curriculum": False,
                   "env_params": env_params,
-                  "continual": continual}
+                  "continual": True}
     
     
     # configure method
@@ -80,7 +78,7 @@ def train_minatar(num_trials,  optimizer):
                   "env_name": env_name,
                   "curriculum": False,
                   "env_params": {},
-                  "continual": False}
+                  "continual": True}
     
     
     # configure method
@@ -138,7 +136,7 @@ def train_kinetix_lifelong(num_trials, optimizer):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="This script trains Proximal Policy Optimisation on the stepping gates and ecorobot benchmarks")
     parser.add_argument("--num_trials", type=int, help="Number of trials", default=10)
-    parser.add_argument("--optimizer", type=str, help="Choose between SimpleGA and OpenES", default="SompleGA")
+    parser.add_argument("--optimizer", type=str, help="Choose between SimpleGA and OpenES", default="SimpleGA")
     args = parser.parse_args()
     
     
