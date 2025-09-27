@@ -36,7 +36,7 @@ Each family of tasks is ran with a separate function call so you can easily choo
 We have ran all training on a single NVIDIA RTX 6000 GPU.
 
 ## Hyperparameters
-The hyperparameters for each method are stored in separaate files (like this one for the SimpleGA [scripts/train/evosax/simplega/hyperparameters.py](scripts/train/evosax/simplega/hyperparameters.py))
+The hyperparameters for each optimizer are within the training scripts. We provide them here for neuro-evolution for an easier reference:
 
 ### SimpleGA Hyperparameters
 
@@ -67,5 +67,5 @@ Once you've finished a  training run, data will be saved in a specific directory
 To compute diversity and PCA plots for this projects, you can run
 
 ```
-python scripts/post_analysis/diversity_and_pca.py --project dir your_project_directory
+python scripts/post_analysis/diversity_analysis.py --project dir your_project_directory
 ```
