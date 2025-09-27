@@ -69,6 +69,3 @@ To compute diversity and PCA plots for this projects, you can run
 ```
 python scripts/post_analysis/diversity_and_pca.py --project dir your_project_directory
 ```
-
-
-
