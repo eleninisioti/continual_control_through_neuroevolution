@@ -52,7 +52,7 @@ def actor_step(
       next_observation=nstate.obs,
       extras={
           'policy_extras': policy_extras,
-          'state_extras': state_extras
+          'state_extras': state_extras,
       })
 
 
@@ -112,13 +112,14 @@ class Evaluator:
       #jax.debug.print("noise in evaluator: {}", continual_env_params["noise"])
 
       eval_first_state = eval_env.reset(reset_keys, gymnax_env_params=env_params, env_params=continual_env_params)
-      return generate_unroll(
+      state, data = generate_unroll(
           eval_env,
           eval_first_state,
           eval_policy_fn(policy_params),
           key,
           env_params=env_params,
-          unroll_length=episode_length // action_repeat)[0]
+          unroll_length=episode_length // action_repeat)
+      return state, data.extras["policy_extras"]["n_dormant"]
 
     self._generate_eval_unroll = jax.jit(generate_eval_unroll)
     self._steps_per_unroll = episode_length * num_eval_envs
@@ -134,7 +135,7 @@ class Evaluator:
     self._key, unroll_key = jax.random.split(self._key)
 
     t = time.time()
-    eval_state = self._generate_eval_unroll(policy_params, unroll_key, env_params, continual_env_params)
+    eval_state, n_dormant = self._generate_eval_unroll(policy_params, unroll_key, env_params, continual_env_params)
     eval_metrics = eval_state.info['eval_metrics']
     eval_metrics.active_episodes.block_until_ready()
     epoch_eval_time = time.time() - t
@@ -159,4 +160,4 @@ class Evaluator:
         **metrics
     }
 
-    return metrics  # pytype: disable=bad-return-type  # jax-ndarray
+    return metrics, n_dormant  # pytype: disable=bad-return-type  # jax-ndarray

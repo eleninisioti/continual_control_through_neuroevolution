@@ -4,7 +4,7 @@ from scripts.train.base.utils import max_rewards
 import numpy as onp
 import numpy as np
 import jax.numpy as jnp
-from kinetix.render import make_render_pixels
+#from kinetix.render import make_render_pixels
 import matplotlib.pyplot as plt
 from PIL import Image
 import io

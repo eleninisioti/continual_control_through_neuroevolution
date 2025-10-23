@@ -43,14 +43,14 @@ import numpy as np
 import optax
 from orbax import checkpoint as ocp
 from methods.brax_wrapper.wrappers.training import wrap as brax_wrap
-from methods.brax_wrapper.continual_utils import recreate_environment_with_gravity
+#from methods.brax_wrapper.continual_utils import recreate_environment_with_gravity
 from methods.brax_wrapper.wrappers.training_gymnax import wrap as gymnax_wrap
 #from brax.envs.wrappers.training import wrap as brax_wrap
 import gymnax
-from envs.stepping_gates.stepping_gates.envs.wrappers import wrap as dgates_wrap
+#from envs.stepping_gates.stepping_gates.envs.wrappers import wrap as dgates_wrap
 import gymnasium
 import numpy as onp
-from methods.brax_wrapper.continual_utils import modify_gravity_directly 
+#from methods.brax_wrapper.continual_utils import modify_gravity_directly 
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
 Metrics = types.Metrics
 
@@ -87,6 +87,7 @@ def train(
     save_params_fn,
     gymnax_env_params, # this is needed for gymnax
     env_params,
+    noise_range: float=0.0,
     skip_connections_prob: float=0.0,
     num_neurons: int=16, # number of neurons used in each layer of the policy network. value network will be this times 8
     num_layers: int=2, # number of layers used in policy network. value network will be this +1
@@ -280,7 +281,7 @@ def train(
     obs_size = env.env.env.env.obs_shape[0]
         
 
-    noise_range = 2.0
+    noise_range = noise_range
     init_noise = jax.random.normal(key_env, (obs_size,))*noise_range
     init_env_params = {"noise": init_noise}
 
@@ -448,6 +449,11 @@ def train(
           unroll_length=unroll_length,
           env_params=gymnax_env_params,
           extra_fields=('truncation',)) # this is used in brax
+      
+      # Remove n_dormant from extras to avoid dimension issues
+      if 'n_dormant' in data.extras:
+          data = data._replace(extras={k: v for k, v in data.extras.items() if k != 'n_dormant'})
+      
 
       return (next_state, next_key), data
 
@@ -595,14 +601,14 @@ def train(
   # Run initial eval
   metrics = {}
   if process_id == 0 and num_evals > 1:
-    metrics = evaluator.run_evaluation(
+    metrics, n_dormant = evaluator.run_evaluation(
         _unpmap(
             (training_state.normalizer_params, training_state.params.policy)),
         training_metrics={},
     env_params=gymnax_env_params,
     continual_env_params={"noise": init_noise})
     logging.info(metrics)
-    progress_fn((0, {"noise": init_noise, "gravity": current_gravity, "params": training_state.params}, metrics))
+    progress_fn((0, {"noise": init_noise, "n_dormant": n_dormant, "gravity": current_gravity, "params": training_state.params}, metrics))
 
   training_metrics = {}
   training_walltime = 0
@@ -625,8 +631,8 @@ def train(
           in_axes=(0, None))(key_envs, key_envs.shape[1])
       # TODO: move extra reset logic to the AutoResetWrapper.
       
-      #if it%200 == 0 and it:
-      #  noise = jax.random.uniform(epoch_key, (obs_size,), minval=-noise_range, maxval=noise_range)
+      if it%200 == 0 and it:
+        noise = jax.random.uniform(epoch_key, (obs_size,), minval=-noise_range, maxval=noise_range)
         
         
         
@@ -722,7 +728,7 @@ def train(
 
     if process_id == 0:
       # Run evals.
-      metrics = evaluator.run_evaluation(
+      metrics, n_dormant = evaluator.run_evaluation(
           _unpmap(
               (training_state.normalizer_params, training_state.params.policy)),
           training_metrics,
@@ -754,7 +760,7 @@ def train(
         
 
       logging.info(metrics)
-      progress_fn((current_step, {"noise": noise, "gravity": current_gravity, "params": training_state.params}, metrics))
+      progress_fn((current_step, {"noise": noise, "n_dormant": n_dormant, "gravity": current_gravity, "params": training_state.params}, metrics))
       params = _unpmap(
           (training_state.normalizer_params, training_state.params)
       )

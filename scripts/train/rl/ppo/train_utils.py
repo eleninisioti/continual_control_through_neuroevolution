@@ -1,7 +1,6 @@
 
 import functools
 import os
-import envs
 import pickle
 from scripts.train.rl.ppo.hyperparams import hyperparams
 from methods.brax_wrapper.ppo import train as ppo
@@ -14,10 +13,10 @@ import jax
 from scripts.train.base.visuals import viz_histogram, viz_heatmap
 from scripts.train.rl.ppo.hyperparams import hyperparams
 from scripts.train.base.utils import max_rewards
-from stepping_gates import envs as stepping_gates_envs
+#from stepping_gates import envs as stepping_gates_envs
 from brax import envs as brax_envs
-from ecorobot import envs as ecorobot_envs
-from envs.stepping_gates.stepping_gates.envs.wrappers import wrap as dgates_wrap
+#from ecorobot import envs as ecorobot_envs
+#from envs.stepping_gates.stepping_gates.envs.wrappers import wrap as dgates_wrap
 import wandb
 import gymnax
 import numpy as onp
@@ -144,7 +143,8 @@ class PPOExperiment(Experiment):
                 "generation": wandb_info["gen"],
                 "current_task": wandb_info["current_task"],
                 "gravity_multiplier": wandb_info["gravity_multiplier"],
-                #"noise": env_params["noise"][0]
+                "noise": env_params["noise"][0],
+                "n_dormant": env_params["n_dormant"][0]
             }
             wandb.log(logging_info)
 
@@ -156,7 +156,8 @@ class PPOExperiment(Experiment):
             "gen": gen,
             "current_task": 0,
             "gravity_multiplier": current_gravity,
-            #"noise": env_params["noise"][0]
+            "noise": env_params["noise"][0],
+            "n_dormant": env_params["n_dormant"][0]
         }
         log(total_eval_info)
     
@@ -182,6 +183,7 @@ class PPOExperiment(Experiment):
         make_inference_fn, params, _, training_state = self.model(environment=self.env,
                                                                   progress_fn=self.progress,
                                                                   save_params_fn=self.save_params,
+                                                                  noise_range=self.config["env_config"]["env_params"]["noise_range"],
                                                                   gymnax_env_params=self.config["env_config"]["gymnax_env_params"],
                                                                                                               env_params=self.config["env_config"]["env_params"])
 

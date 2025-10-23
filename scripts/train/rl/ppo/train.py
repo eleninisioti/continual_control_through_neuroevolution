@@ -10,7 +10,7 @@ import argparse
 
 
 
-def train_gymnax(num_trials, env_name, continual):
+def train_gymnax(num_trials, env_name, noise_range, continual=True):
 
     # configure experiment
     exp_config = {"seed": 0,
@@ -18,7 +18,7 @@ def train_gymnax(num_trials, env_name, continual):
     
     # configure environment
     env_params = default_env_params[env_name]
-    env_params["noise_range"] = 0.0
+    env_params["noise_range"] = noise_range
     env_config = {"env_type": "gymnax",
                   "env_name": env_name,
                   "curriculum": False,
@@ -42,11 +42,26 @@ def train_gymnax(num_trials, env_name, continual):
                      exp_config=exp_config)
     exp.run()
 
+def train_classic_control_all(num_trials, optimizer):
+       
+    train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  noise_range=1.0)
+    train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=1.0, optimizer=optimizer)
+    train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=1.0, optimizer=optimizer)
 
+       
     
     
 def train_gymnax_all(num_trials):
-    train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", continual=True)
+    # train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", continual=True)
+    train_gymnax(num_trials=num_trials, env_name="CartPole-v1",noise_range=0.0, continual=True)
+    train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",noise_range=0.0, continual=True)
+    train_gymnax(num_trials=num_trials, env_name="Acrobot-v1",noise_range=0.0, continual=True)
+    
+    
+    train_gymnax(num_trials=num_trials, env_name="CartPole-v1",noise_range=1.0, continual=True)
+    train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",noise_range=1.0, continual=True)
+    train_gymnax(num_trials=num_trials, env_name="Acrobot-v1",noise_range=1.0, continual=True)
+
     #train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",continual=False)
     #train_gymnax(num_trials=num_trials, env_name="CartPole-v1",continual=False)
 

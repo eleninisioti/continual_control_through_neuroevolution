@@ -48,7 +48,7 @@ from methods.brax_wrapper.wrappers.training import wrap as brax_wrap
 from methods.brax_wrapper.wrappers.training_gymnax_vision import wrap as gymnax_wrap
 #from brax.envs.wrappers.training import wrap as brax_wrap
 import gymnax
-from envs.stepping_gates.stepping_gates.envs.wrappers import wrap as dgates_wrap
+#
 import gymnasium
 import numpy as onp
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]

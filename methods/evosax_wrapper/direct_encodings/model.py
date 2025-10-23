@@ -18,6 +18,7 @@ class PolicyState(NamedTuple):
     weights: jax.Array
     adj: jax.Array
     rnn_state: Optional[jax.Array]
+    n_dormant: Optional[jax.Array] = None
 
 
 class MLP(eqx.Module):
