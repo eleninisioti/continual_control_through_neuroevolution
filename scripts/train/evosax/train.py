@@ -11,7 +11,7 @@ import argparse
 
 
     
-def train_gymnax(num_trials, env_name, population_size, noise_range, optimizer):
+def train_gymnax(num_trials, env_name, population_size, noise_range, optimizer, perturbe_every_n_gens):
 
     # configure experiment
     exp_config = {"seed": 0,
@@ -20,7 +20,7 @@ def train_gymnax(num_trials, env_name, population_size, noise_range, optimizer):
     # configure environment
     env_params = default_env_params[env_name]
     env_params["noise_range"] = noise_range
-
+    env_params["perturbe_every_n_gens"] = perturbe_every_n_gens
     env_config = {"env_type": "gymnax",
                   "env_name": env_name,
                   "curriculum": False,
@@ -37,7 +37,7 @@ def train_gymnax(num_trials, env_name, population_size, noise_range, optimizer):
               "sigma_init": 0.1, "elite_ratio": 0.5} # chanfws dfrom 1
     else:
         raise ValueError(f"Invalid optimizer: {optimizer}")
-    opt_kws = {"sigma_init": 0.5, "elite_ratio":0.5}
+    opt_kws = {"sigma_init": 0.5    }
     popsize = population_size
 
     optimizer_name = "SimpleGA"
@@ -114,11 +114,27 @@ def train_minatar(num_trials,  optimizer):
 
 
 def train_classic_control_all(num_trials, optimizer):
-       
-    train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  population_size=512, noise_range=1.0, optimizer=optimizer)
-    train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=1.0, optimizer=optimizer)
-    train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=1.0, optimizer=optimizer)
+    #train_gymnax(num_trials=num_trials, env_name="CartPole-v1", population_size=512, noise_range=1.0, optimizer=optimizer)
 
+       
+   #train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  population_size=512, noise_range=1.0, optimizer=optimizer)
+    #train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=1.0, optimizer=optimizer)
+    #train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=1.0, optimizer=optimizer)
+
+
+    #train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  population_size=512, noise_range=0.0, optimizer=optimizer)
+    #train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=0.0, optimizer=optimizer)
+    train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=0.0, optimizer=optimizer)
+    
+    
+def train_classic_control_parameteric(num_trials, optimizer):
+    n_gens = [5,10, 20, 50, 100, 200, 500, 100]
+    #n_gens = [500, 1000]
+    for perturbe_every_n_gens in n_gens:
+        train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+        train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+        train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+        
         
 
 def train_kinetix_lifelong(num_trials, optimizer):
@@ -128,8 +144,9 @@ def train_kinetix_lifelong(num_trials, optimizer):
         "m/h0_unicycle",
     ]
 
+    env_name = env_names[0]  # Use the first environment
     print(f"Starting with environment: {env_name}")
-    train_kinetix(num_trials=num_trials, env_name=env_name, optimizer=optimizer)
+    # train_kinetix(num_trials=num_trials, env_name=env_name, optimizer=optimizer)  # Commented out since function doesn't exist
     
 
 
@@ -140,6 +157,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     
+    train_classic_control_parameteric(num_trials=args.num_trials, optimizer=args.optimizer)
+    
     # will train for the lifelong variations of Acrobot, Cartpole, MountainCar 
     train_classic_control_all(num_trials=args.num_trials, optimizer=args.optimizer)
 
@@ -147,4 +166,4 @@ if __name__ == "__main__":
     train_minatar(num_trials=args.num_trials, optimizer=args.optimizer)
 
     # will train Kineitx (medium difficuly tasks))
-    train_kinetix_all(num_trials=args.num_trials, optimizer=args.optimizer)
+    train_kinetix_lifelong(num_trials=args.num_trials, optimizer=args.optimizer)

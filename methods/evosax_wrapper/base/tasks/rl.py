@@ -10,15 +10,17 @@ import equinox as eqx
 from jaxtyping import Float, PyTree
 import gymnax
 from craftax.craftax.envs.craftax_symbolic_env import CraftaxSymbolicEnvNoAutoReset
+"""
 from kinetix.environment.env import make_kinetix_env
 from kinetix.util import generate_params_from_config
 from kinetix.environment.ued.ued import make_reset_fn_from_config
 from kinetix.environment.utils import ActionType, ObservationType
 from kinetix.environment.env_state import EnvParams, StaticEnvParams
 from kinetix.util.config import normalise_config
+"""
 from flax.serialization import to_state_dict
 import yaml
-from methods.Kinetix.kinetix.util.saving import load_from_json_file
+#from methods.Kinetix.kinetix.util.saving import load_from_json_file
 
 Params: TypeAlias = PyTree
 TaskParams: TypeAlias = PyTree
@@ -193,7 +195,6 @@ class GymnaxTaskWithPerturbation(eqx.Module):
     reward_for_solved: float
     data_fn: Callable[[PyTree], dict]
     gymnax_env_params: PyTree
-    perturbe_every_n_gens: int
     noise_range: float
     obs_size: int
     action_size: int
@@ -226,7 +227,6 @@ class GymnaxTaskWithPerturbation(eqx.Module):
         self.num_tasks = 1
         self.reward_for_solved = 5000
         self.current_task = 0
-        self.perturbe_every_n_gens = 200
         #self.noise_range = env_kwargs.get("noise_range", 2.0)  # Default to 2.0 if not specified
         self.noise_range =  env_kwargs["noise_range"]
         #self.noise_range = 0.0
@@ -296,7 +296,7 @@ class GymnaxTaskWithPerturbation(eqx.Module):
             #jax.debug.print("obs: {}", obs)
             #noise = jnp.array([1.52,-2.64])
             #noise = jnp.array([1.0, 1.0])
-            #obs = obs + noise
+            obs = obs + noise
    
             #obs = obs.reshape(obs_shape)
 
@@ -316,6 +316,7 @@ class GymnaxTaskWithPerturbation(eqx.Module):
         indexes = jnp.arange(states.env_state.reward.shape[0])
         data["reward"] = jnp.where(indexes > first_done, 0, states.env_state.reward)
         data["episode_length"] = first_done
+        data["n_dormant"] = jnp.mean(states.policy_state.n_dormant[:,0])
 
   
 

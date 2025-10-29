@@ -79,7 +79,7 @@ class PPOExperiment(Experiment):
         self.env, env_params = gymnax.make(env_id=self.config["env_config"]["env_name"])
         
         env_params = env_params.replace(max_steps_in_episode=default_env_params[self.config["env_config"]["env_name"]]["max_steps_in_episode"])
-        self.config["env_config"]["env_params"] = {"noise_range": self.config["env_config"]["env_params"]["noise_range"]}
+        self.config["env_config"]["env_params"] = {"noise_range": self.config["env_config"]["env_params"]["noise_range"], "perturbe_every_n_gens": self.config["env_config"]["env_params"]["perturbe_every_n_gens"]}
         self.config["env_config"]["gymnax_env_params"] = env_params
 
 
@@ -144,7 +144,7 @@ class PPOExperiment(Experiment):
                 "current_task": wandb_info["current_task"],
                 "gravity_multiplier": wandb_info["gravity_multiplier"],
                 "noise": env_params["noise"][0],
-                "n_dormant": env_params["n_dormant"][0]
+                "n_dormant": onp.mean(env_params["n_dormant"])
             }
             wandb.log(logging_info)
 
@@ -184,6 +184,7 @@ class PPOExperiment(Experiment):
                                                                   progress_fn=self.progress,
                                                                   save_params_fn=self.save_params,
                                                                   noise_range=self.config["env_config"]["env_params"]["noise_range"],
+                                                                  perturbe_every_n_gens=self.config["env_config"]["env_params"]["perturbe_every_n_gens"],
                                                                   gymnax_env_params=self.config["env_config"]["gymnax_env_params"],
                                                                                                               env_params=self.config["env_config"]["env_params"])
 

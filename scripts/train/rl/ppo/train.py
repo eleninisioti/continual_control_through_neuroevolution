@@ -10,7 +10,7 @@ import argparse
 
 
 
-def train_gymnax(num_trials, env_name, noise_range, continual=True):
+def train_gymnax(num_trials, env_name, noise_range, continual=True, perturbe_every_n_gens=None):
 
     # configure experiment
     exp_config = {"seed": 0,
@@ -19,6 +19,7 @@ def train_gymnax(num_trials, env_name, noise_range, continual=True):
     # configure environment
     env_params = default_env_params[env_name]
     env_params["noise_range"] = noise_range
+    env_params["perturbe_every_n_gens"] = perturbe_every_n_gens
     env_config = {"env_type": "gymnax",
                   "env_name": env_name,
                   "curriculum": False,
@@ -44,11 +45,14 @@ def train_gymnax(num_trials, env_name, noise_range, continual=True):
 
 def train_classic_control_all(num_trials, optimizer):
        
-    train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  noise_range=1.0)
-    train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=1.0, optimizer=optimizer)
-    train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=1.0, optimizer=optimizer)
-
-       
+    #train_gymnax(num_trials=num_trials, env_name="CartPole-v1",noise_range=0.0, continual=True)
+    train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",noise_range=0.0, continual=True)
+    #train_gymnax(num_trials=num_trials, env_name="Acrobot-v1",noise_range=0.0, continual=True)
+    
+    
+    #train_gymnax(num_trials=num_trials, env_name="CartPole-v1",noise_range=1.0, continual=True)
+    #train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",noise_range=1.0, continual=True)
+    #train_gymnax(num_trials=num_trials, env_name="Acrobot-v1",noise_range=1.0, continual=True)      
     
     
 def train_gymnax_all(num_trials):
@@ -70,6 +74,13 @@ def train_gymnax_all(num_trials):
     #train_gymnax(num_trials=num_trials, env_name="Breakout-MinAtar")
 
 
+def train_classic_control_parameteric(num_trials, optimizer):
+    for perturbe_every_n_gens in [5,10, 20, 50, 100, 200, 500, 1000]:
+        train_gymnax(num_trials=num_trials, env_name="CartPole-v1",   noise_range=1.0,  perturbe_every_n_gens=perturbe_every_n_gens)
+        train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", noise_range=1.0,perturbe_every_n_gens=perturbe_every_n_gens)
+        train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  noise_range=1.0, perturbe_every_n_gens=perturbe_every_n_gens)
+        
+      
 
 
 if __name__ == "__main__":
@@ -79,12 +90,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     
+    train_classic_control_parameteric(num_trials=args.num_trials, optimizer=args.optimizer)
+
+    
+    
     # will train for the lifelong variations of Acrobot, Cartpole, MountainCar 
-    train_classic_control_all(num_trials=args.num_trials, optimizer=args.optimizer)
+    #train_classic_control_all(num_trials=args.num_trials, optimizer=args.optimizer)
 
     # will train Minatar (Breakout, Asterix, SpaceInvaders)
-    train_minatar(num_trials=args.num_trials, optimizer=args.optimizer)
+    #train_minatar(num_trials=args.num_trials, optimizer=args.optimizer)
 
     # will train Kineitx (medium difficuly tasks))
-    train_kinetix_all(num_trials=args.num_trials, optimizer=args.optimizer)
+    #train_kinetix_all(num_trials=args.num_trials, optimizer=args.optimizer)
 

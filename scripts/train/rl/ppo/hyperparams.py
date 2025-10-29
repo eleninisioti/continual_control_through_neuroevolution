@@ -14,7 +14,7 @@ train_timesteps = {"n_parity": 150_000_000,
                    "Acrobot-v1": 512*500*1000*10,
                   # "Acrobot-v1": 204_480_000,
                    "MountainCar-v0": 512*500*1000*10,
-                   "CartPole-v1": 512*500*1000,
+                   "CartPole-v1": 512*500*1000*10,
                    "Breakout-MinAtar": 500_000_000,
                    }
 

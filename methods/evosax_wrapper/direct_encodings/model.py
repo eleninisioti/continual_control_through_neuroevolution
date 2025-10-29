@@ -9,8 +9,8 @@ from typing import Mapping, NamedTuple, Tuple
 import equinox.nn as nn
 from flax import linen
 import pickle
-from methods.Kinetix.kinetix.models import make_network_from_config
-from methods.Kinetix.kinetix.models.actor_critic import ScannedRNN
+#from methods.Kinetix.kinetix.models import make_network_from_config
+#from methods.Kinetix.kinetix.models.actor_critic import ScannedRNN
 from typing import NamedTuple
 import numpy as np
 
@@ -59,15 +59,18 @@ class MLP(eqx.Module):
             
         self.action_dims = action_dims
         self.obs_dims = obs_dims
-        self.mlp = nn.MLP(obs_dims,
-                          action_dims,
-                        #16, 2,
-                        num_hidden, num_layers,
-                          #activation=linen.relu, final_activation=linen.tanh,
-                          final_activation=final_activation, activation=activation,
-                                                    #activation=linen.relu, final_activation=lambda x: x,
-
-                      key=key, use_bias=True, use_final_bias=True)
+        
+        # Create hidden layer sizes list
+        hidden_sizes = [num_hidden] * num_layers
+        
+        self.mlp = MLPWithDormantTracking(
+            input_size=obs_dims,
+            output_size=action_dims,
+            hidden_sizes=hidden_sizes,
+            activation=activation,
+            final_activation=final_activation,
+            key=key
+        )
 
 
 
@@ -75,7 +78,7 @@ class MLP(eqx.Module):
 
         # extract weights and biases
 
-        final_policy = PolicyState(weights=jnp.zeros((1,1)), adj=jnp.zeros((1,1)), rnn_state=jnp.zeros((jnp.zeros((1,1)).shape[0],)))
+        final_policy = PolicyState(weights=jnp.zeros((1,1)), adj=jnp.zeros((1,1)), rnn_state=jnp.zeros((jnp.zeros((1,1)).shape[0],)), n_dormant=jnp.zeros((1,)))
         interm_policies =jax.tree_map(lambda x: x[None,:], final_policy)
         return final_policy, interm_policies
 
@@ -112,17 +115,73 @@ class MLP(eqx.Module):
             bias = bias.at[start_x:start_x + el.bias.shape[0]].set(el.bias)
             start_x += el.bias.shape[0]
         adj = jnp.where(weights, 1.0, 0.0)
-        final_policy = PolicyState(weights=weights, adj=adj, rnn_state=jnp.zeros((weights.shape[0],)))
+        final_policy = PolicyState(weights=weights, adj=adj, rnn_state=jnp.zeros((weights.shape[0],)), n_dormant=jnp.zeros((weights.shape[0],)))
         interm_policies =jax.tree_map(lambda x: x[None,:], final_policy)
         return final_policy, interm_policies
 
     def __call__(self, obs: jax.Array, state: PolicyState, key: jax.Array, obs_size=None, action_size=None) -> Tuple[jax.Array, PolicyState]:
         #jax.debug.print("obs: {}",obs)
         
-        a = self.mlp(obs)
+        a, dormant_ratio = self.mlp(obs)
         #jax.debug.print("inside model: {}", a)
+        
+        # Update state with dormant neuron information
+        updated_state = state._replace(n_dormant=dormant_ratio)
 
-        return a, state
+        return a, updated_state
+
+
+class MLPWithDormantTracking(eqx.Module):
+    """MLP that tracks dormant neurons using Brax logic"""
+    layers: list
+    activation: callable
+    final_activation: callable
+    
+    def __init__(self, input_size: int, output_size: int, hidden_sizes: list, 
+                 activation=jax.nn.relu, final_activation=lambda x: x, *, key):
+        keys = jax.random.split(key, len(hidden_sizes) + 1)
+        
+        # Create layers
+        self.layers = []
+        prev_size = input_size
+        for i, hidden_size in enumerate(hidden_sizes):
+            self.layers.append(eqx.nn.Linear(prev_size, hidden_size, key=keys[i]))
+            prev_size = hidden_size
+        
+        # Final layer
+        self.layers.append(eqx.nn.Linear(prev_size, output_size, key=keys[-1]))
+        
+        self.activation = activation
+        self.final_activation = final_activation
+    
+    def __call__(self, x: jax.Array) -> Tuple[jax.Array, jax.Array]:
+        """Returns (output, dormant_ratio) - copied from Brax MLP logic"""
+        hidden = x
+        n_dormant = 0 
+        n_neurons = 0
+        
+        for i, layer in enumerate(self.layers):
+            hidden = layer(hidden)
+            if i != len(self.layers) - 1:  # Not the final layer
+                hidden = self.activation(hidden)
+                
+            # Calculate dormant neurons for this layer (Brax logic)
+            mean_act = jnp.mean(jnp.abs(hidden))
+            per_neuron_act = jnp.abs(hidden) / mean_act
+            
+            #jax.debug.print("mean_act: {}", mean_act)
+            #jax.debug.print("per_neuron_act: {}", per_neuron_act)
+                
+            n_dormant += jnp.sum(jnp.where(per_neuron_act <= 0.01, 1, 0))
+            n_neurons += hidden.size
+        
+        # Apply final activation
+        output = self.final_activation(hidden)
+        
+        # Calculate dormant ratio
+        dormant_ratio = n_dormant / n_neurons
+        
+        return output, jnp.array([dormant_ratio])
 
 
 class RNN(eqx.Module):

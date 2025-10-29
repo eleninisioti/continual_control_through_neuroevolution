@@ -61,6 +61,7 @@ class EvosaxTrainer(BaseTrainer):
   noise_range: float,
 
 			save_params_fn: int,
+   perturbe_every_n_gens: int,
 			reward_for_solved: float=0,
 			init_evosax_state=None,
 
@@ -85,7 +86,7 @@ class EvosaxTrainer(BaseTrainer):
 		self.save_params_fn = save_params_fn
 		self.pretrained_evosax_state = init_evosax_state
 		self.obs_size = task.obs_size
-		self.perturbe_every_n_gens = 200
+		self.perturbe_every_n_gens = perturbe_every_n_gens
 		if isinstance(strategy, str):
 			assert popsize is not None
 			self.strategy = self.create_strategy(strategy, popsize, params_shaper.total_params, **es_kws) # type: ignore

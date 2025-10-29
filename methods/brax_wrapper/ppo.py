@@ -87,6 +87,7 @@ def train(
     save_params_fn,
     gymnax_env_params, # this is needed for gymnax
     env_params,
+    perturbe_every_n_gens: int=None,
     noise_range: float=0.0,
     skip_connections_prob: float=0.0,
     num_neurons: int=16, # number of neurons used in each layer of the policy network. value network will be this times 8
@@ -278,7 +279,11 @@ def train(
     init_env_params = {"noise": [0.0]}
   else:
     reset_fn = jax.jit(jax.vmap(env.reset, in_axes=(0, None, None)))
-    obs_size = env.env.env.env.obs_shape[0]
+    #obs_size = env.env.env.env.obs_shape[0]
+    if "MountainCar" in environment.name:
+        obs_size = 2 # only for mountaincar
+    else:
+        obs_size = env.obs_shape[0]
         
 
     noise_range = noise_range
@@ -631,7 +636,7 @@ def train(
           in_axes=(0, None))(key_envs, key_envs.shape[1])
       # TODO: move extra reset logic to the AutoResetWrapper.
       
-      if it%200 == 0 and it:
+      if it%perturbe_every_n_gens == 0 and it:
         noise = jax.random.uniform(epoch_key, (obs_size,), minval=-noise_range, maxval=noise_range)
         
         
@@ -767,7 +772,7 @@ def train(
       policy_params_fn(current_step, make_policy, params)
 
   total_steps = current_step
-  assert total_steps >= num_timesteps
+  #assert total_steps >= num_timesteps
 
   # If there was no mistakes the training_state should still be identical on all
   # devices.

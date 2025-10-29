@@ -9,7 +9,7 @@ from typing import Callable, Optional, Tuple, Any, TypeAlias, Union
 import jax.experimental.host_callback as hcb
 import yaml
 from jaxtyping import PyTree
-from kinetix.environment.env_state import EnvParams, StaticEnvParams
+#from kinetix.environment.env_state import EnvParams, StaticEnvParams
 from kinetix.util.config import normalise_config
 import yaml
 from methods.Kinetix.kinetix.util.saving import load_from_json_file
@@ -118,8 +118,13 @@ class BaseTrainer(eqx.Module):
 			_step = progress_bar_fori(self.train_steps)(_step) #type: ignore
 
 		task_params_init = 0
-        #keys = jr.split(key, 10)
-		total_noise = jax.random.normal(key, (50,self.obs_size))*self.noise_range
+		#keys = jr.split(key, 10)
+		num_tasks = int(self.train_steps / self.perturbe_every_n_gens) + 50
+		print("train_steps", self.train_steps)
+		print("perturbe_every_n_gens", self.perturbe_every_n_gens)
+		print("num_tasks", num_tasks)
+		quit()
+		total_noise = jax.random.normal(key, (num_tasks,self.obs_size))*self.noise_range
 
 
 		
@@ -194,8 +199,16 @@ class BaseTrainer(eqx.Module):
    
 			
 			# Print message when condition is met
-			
-			self.logger.log(s, data, task_params, noise, current_gravity=0.0)
+			# Compute pairwise distances in JAX (flatten per individual)
+			params = data["parameters"]
+			pop_size = params.shape[0]
+			flat_params = jnp.reshape(params, (pop_size, -1))
+			diffs = flat_params[:, None, :] - flat_params[None, :, :]
+			pairwise_dists = jnp.linalg.norm(diffs, axis=-1)
+			iu0, iu1 = jnp.triu_indices(pop_size, k=1)
+			distances = pairwise_dists[iu0, iu1]
+			diversity = jnp.mean(distances)
+			self.logger.log(s, data, task_params, noise, diversity=diversity, current_gravity=0.0)
 
 			return [s, k, task_params, should_stop, env_state, data["parameters"], data["fitness"]]
 
@@ -206,11 +219,10 @@ class BaseTrainer(eqx.Module):
 			_step = progress_bar_fori(self.train_steps)(_step) #type: ignore
 
 		task_params_init = 0
-        #keys = jr.split(key, 10)
-		total_noise = jax.random.normal(key, (50,self.obs_size))*self.noise_range
+		#keys = jr.split(key, 10)
+		num_tasks = int(self.train_steps / self.perturbe_every_n_gens) + 50
+		total_noise = jax.random.normal(key, (num_tasks,self.obs_size))*self.noise_range
 
-
-		
 		# Use scan with early termination support
 		
 		def _step_with_early_stop(carry, x):
@@ -219,10 +231,9 @@ class BaseTrainer(eqx.Module):
 			current_task = generation // self.perturbe_every_n_gens
 			#current_task = 0 
 			noise = total_noise[current_task, :]
-   
+
 			#jax.debug.print("noise: {}", noise)
 			#noise = jax.numpy.where(generation % self.perturbe_every_n_gens == 0, new_noise, noise)
-			
 
 			# If we should stop, return current state without training
 			"""
@@ -236,13 +247,11 @@ class BaseTrainer(eqx.Module):
 			
 			# Extract the should_stop flag from the training step result
 			#_, _, _, new_should_stop, env_state, parameters, fitnesses = new_carry
-   
+
 			new_carry = [new_state, new_key, new_task_params, new_should_stop, new_env_state]
 			
 			# Return (carry, output) pair as required by scan
 			return new_carry, (parameters, fitnesses)
-		
-	
 
 		# Run scan with early termination
 		(state, key, task_params, _, _), (archive_history, fitnesses_history) = jax.lax.scan(

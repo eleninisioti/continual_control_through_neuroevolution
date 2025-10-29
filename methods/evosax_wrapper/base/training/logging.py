@@ -39,7 +39,7 @@ class Logger:
 
 
 
-	def log(self, state: TrainState, data: Data, task_params: jnp.array, noise, current_gravity):
+	def log(self, state: TrainState, data: Data, task_params: jnp.array, noise, diversity, current_gravity):
 
 
 
@@ -67,8 +67,12 @@ class Logger:
 
 		num_edges= non_zero_count
 		num_nodes= unique_indexes_count
+		
+		# Extract n_dormant information for all individuals
+		n_dormant = data["interm_policies"].n_dormant[:, 0, dev_step]  # Extract for all individuals at dev_step
+		
 		jax.lax.cond(state.gen_counter%self.aim_freq==0,
-               lambda data: self.metrics_fn(state, data, data["data"]["episode_length"], task_params, num_nodes, num_edges, noise, current_gravity), 
+               lambda data: self.metrics_fn(state, data, data["data"]["episode_length"], task_params, num_nodes, num_edges, noise, current_gravity,  data["data"]["n_dormant"], diversity), 
                lambda data: None, data)
 
 
