@@ -234,27 +234,32 @@ def analyze_task(task_name, data_dir, frequencies, success_threshold, title, use
 def main():
     # Set up paths
     base_dir = Path('/home/eleni/workspace/continual_control_through_neuroevolution/scripts/freq_analysis')
+    data_dir = "freq_anal"
     
+      # Analyze Cartpole GA (use >= since goal is exactly 199)
+    cartpole_ga_dir = base_dir / data_dir / 'cartpole' / 'ga'
+    cartpole_frequencies = [5, 20, 50, 100, 200, 500]
+    analyze_task('cartpole_ga', cartpole_ga_dir, cartpole_frequencies, 199, 'Cartpole GA', use_greater_than_or_equal=True)
+    
+    
+      # Analyze Mountaincar GA
+    mountaincar_ga_dir = base_dir / data_dir / 'mountaincar' / 'ga'
+    mountaincar_frequencies = [5, 10, 50, 100, 200, 500, 1000]
+    analyze_task('mountaincar_ga', mountaincar_ga_dir, mountaincar_frequencies, -130, 'Mountaincar GA', use_greater_than_or_equal=False)
+
+  
+    quit()
     # Analyze Acrobot GA
-    acrobot_ga_dir = base_dir / 'data' / 'acrobot' / 'ga'
+    acrobot_ga_dir = base_dir / data_dir / 'acrobot' / 'ga'
     acrobot_frequencies = [5, 10, 20, 50, 100, 200]
     analyze_task('acrobot_ga', acrobot_ga_dir, acrobot_frequencies, -80, 'Acrobot GA', use_greater_than_or_equal=False)
     
     # Analyze Acrobot PPO
-    acrobot_ppo_dir = base_dir / 'data' / 'acrobot' / 'ppo'
+    acrobot_ppo_dir = base_dir / data_dir / 'acrobot' / 'ppo'
     acrobot_ppo_frequencies = [10, 20]
     analyze_task('acrobot_ppo', acrobot_ppo_dir, acrobot_ppo_frequencies, -80, 'Acrobot PPO', use_greater_than_or_equal=False)
     
-    # Analyze Cartpole GA (use >= since goal is exactly 199)
-    cartpole_ga_dir = base_dir / 'data' / 'cartpole' / 'ga'
-    cartpole_frequencies = [5, 20, 50, 100, 200, 500]
-    analyze_task('cartpole_ga', cartpole_ga_dir, cartpole_frequencies, 199, 'Cartpole GA', use_greater_than_or_equal=True)
-    
-    # Analyze Mountaincar GA
-    mountaincar_ga_dir = base_dir / 'data' / 'mountaincar' / 'ga'
-    mountaincar_frequencies = [5, 10, 50, 100, 200]
-    analyze_task('mountaincar_ga', mountaincar_ga_dir, mountaincar_frequencies, -120, 'Mountaincar GA', use_greater_than_or_equal=False)
-
+  
 
 if __name__ == "__main__":
     main()

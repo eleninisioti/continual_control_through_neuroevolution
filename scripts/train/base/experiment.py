@@ -137,6 +137,7 @@ class Experiment:
         self.setup()
 
         for trial in range(self.config["exp_config"]["num_trials"]):
+            trial = trial - 1
             self.setup_trial(trial)
 
             self.train_trial()

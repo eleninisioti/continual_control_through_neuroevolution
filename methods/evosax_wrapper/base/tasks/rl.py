@@ -157,7 +157,7 @@ class CraftaxTask(eqx.Module):
 			obs, gymnax_state, reward, done, info = self.env.step(key, state.env_state.env_state, action, self.gymnax_env_params)
 			#obs = obs.reshape(-1)  # Collapse to single dimension
 
-			obs = obs + noise
+			#obs = obs + noise
    
 			#obs = obs.reshape(obs_shape)
 
