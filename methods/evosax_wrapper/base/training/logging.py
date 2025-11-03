@@ -39,7 +39,14 @@ class Logger:
 
 
 
-	def log(self, state: TrainState, data: Data, task_params: jnp.array, noise, diversity, current_gravity):
+	def log(self, state: TrainState, data: Data, task_params: jnp.array, noise, diversity, current_gravity, 
+			flat_mean=None, flat_min=None, flat_max=None, flat_var=None,
+			mean_individual_mean=None, mean_individual_min=None, mean_individual_max=None, mean_individual_var=None,
+			var_individual_mean=None, var_individual_min=None, var_individual_max=None, var_individual_var=None,
+			mean_skewness=None, mean_kurtosis=None, mean_uniformity_ratio=None,
+			mean_upper_tail_ratio=None, mean_lower_tail_ratio=None, 
+			individual_skewness=None, individual_kurtosis=None, uniformity_ratio=None,
+			flat_params_for_testing=None):
 
 
 
@@ -71,9 +78,44 @@ class Logger:
 		# Extract n_dormant information for all individuals
 		n_dormant = data["interm_policies"].n_dormant[:, 0, dev_step]  # Extract for all individuals at dev_step
 		
-		jax.lax.cond(state.gen_counter%self.aim_freq==0,
-               lambda data: self.metrics_fn(state, data, data["data"]["episode_length"], task_params, num_nodes, num_edges, noise, current_gravity,  data["data"]["n_dormant"], diversity), 
-               lambda data: None, data)
+		jax.lax.cond(
+			state.gen_counter%self.aim_freq==0,
+			lambda data: self.metrics_fn(
+				state,
+				data,
+				data["data"]["episode_length"],
+				task_params,
+				num_nodes,
+				num_edges,
+				noise,
+				current_gravity,
+				data["data"]["n_dormant"],
+				diversity,
+				flat_mean,
+				flat_min,
+				flat_max,
+				flat_var,
+				mean_individual_mean,
+				mean_individual_min,
+				mean_individual_max,
+				mean_individual_var,
+				var_individual_mean,
+				var_individual_min,
+				var_individual_max,
+				var_individual_var,
+				mean_skewness,
+				mean_kurtosis,
+				mean_uniformity_ratio,
+				mean_upper_tail_ratio,
+				mean_lower_tail_ratio,
+				individual_skewness,
+				individual_kurtosis,
+				uniformity_ratio,
+				flat_params_for_testing,
+			),
+			lambda data: None,
+			data,
+		)
 
 
 

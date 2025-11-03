@@ -77,12 +77,26 @@ class SimpleGA(Strategy):
     ) -> EvoState:
         """`initialize` the differential evolution strategy."""
         if pretrained_evosax_state is None:
+            
             initialization = jax.random.uniform(
                 rng,
                 (self.elite_popsize, self.num_dims),
                 minval=params.init_min,
                 maxval=params.init_max,
             )
+            """
+            target_variance = 400.0
+            target_std = jnp.sqrt(target_variance)  # std = 20
+            center = (params.init_min + params.init_max) / 2.0
+            #center = 0.0
+            initialization = jax.random.normal(
+                rng,
+                (self.elite_popsize, self.num_dims),
+            ) * target_std + center
+            # Clip to respect minval and maxval bounds
+            initialization = jnp.clip(initialization, params.init_min, params.init_max)
+            
+           """
             state = EvoState(
                 mean=initialization.mean(axis=0),
                 archive=initialization,
@@ -121,6 +135,7 @@ class SimpleGA(Strategy):
         )
         #epsilon = jnp.zeros_like(epsilon)
         x += epsilon
+        
         return x, state
 
     def tell_strategy(

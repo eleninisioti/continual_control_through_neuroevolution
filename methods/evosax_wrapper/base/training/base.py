@@ -201,14 +201,92 @@ class BaseTrainer(eqx.Module):
 			# Print message when condition is met
 			# Compute pairwise distances in JAX (flatten per individual)
 			params = data["parameters"]
+
+   
+   
 			pop_size = params.shape[0]
 			flat_params = jnp.reshape(params, (pop_size, -1))
+   
+   
+	   
+			# Compute per-individual statistics (for each individual: mean, min, max, var of their weights)
+			individual_means = jnp.mean(flat_params, axis=1)  # (pop_size,) - mean weight per individual
+			individual_mins = jnp.min(flat_params, axis=1)     # (pop_size,) - min weight per individual
+			individual_maxs = jnp.max(flat_params, axis=1)     # (pop_size,) - max weight per individual
+			individual_vars = jnp.var(flat_params, axis=1)     # (pop_size,) - var of weights per individual
+			
+			# Compute statistics across population for each per-individual metric
+			# Mean across population
+			mean_individual_mean = jnp.mean(individual_means)
+			mean_individual_min = jnp.mean(individual_mins)
+			mean_individual_max = jnp.mean(individual_maxs)
+			mean_individual_var = jnp.mean(individual_vars)
+			
+			# Variance across population (measures how much individuals differ in these metrics)
+			var_individual_mean = jnp.var(individual_means)
+			var_individual_min = jnp.var(individual_mins)
+			var_individual_max = jnp.var(individual_maxs)
+			var_individual_var = jnp.var(individual_vars)
+			
+			# Distribution shape statistics for each individual
+			# Normalized data for each individual (centered and scaled)
+			individual_stds = jnp.std(flat_params, axis=1, keepdims=True) + 1e-8  # (pop_size, 1)
+			normalized_params = (flat_params - individual_means[:, None]) / individual_stds  # (pop_size, num_params)
+			
+			# Skewness (3rd moment) - measures asymmetry, ~0 for normal, high for heavy-tailed
+			# skewness = E[(X-μ)³] / σ³
+			individual_skewness = jnp.mean(normalized_params ** 3, axis=1)  # (pop_size,)
+			
+			# Kurtosis (4th moment) - measures tail heaviness, ~0 for normal, >0 for heavy tails
+			# kurtosis = E[(X-μ)⁴] / σ⁴ - 3 (excess kurtosis)
+			individual_kurtosis = jnp.mean(normalized_params ** 4, axis=1) - 3.0  # (pop_size,)
+			
+			# Uniformity metrics
+			# For uniform distribution: min and max should be at bounds, variance should be (max-min)²/12
+			# Check how close variance is to expected uniform variance
+			individual_ranges = individual_maxs - individual_mins  # (pop_size,)
+			expected_uniform_var = (individual_ranges ** 2) / 12.0  # (pop_size,)
+			uniformity_ratio = individual_vars / (expected_uniform_var + 1e-8)  # close to 1.0 for uniform
+			
+			# Tail heaviness indicators (for power law detection)
+			# Check quantile ratios: heavy tails have large ratios between extreme quantiles
+			# Use quantile with [0,1] range (0.99 = 99th percentile)
+			q99_individual = jnp.quantile(flat_params, 0.99, axis=1)  # 99th percentile per individual
+			q95_individual = jnp.quantile(flat_params, 0.95, axis=1)  # 95th percentile per individual
+			q5_individual = jnp.quantile(flat_params, 0.05, axis=1)   # 5th percentile per individual
+			q1_individual = jnp.quantile(flat_params, 0.01, axis=1)    # 1st percentile per individual
+			upper_tail_ratio = (q99_individual - q95_individual) / (individual_stds[:, 0] + 1e-8)  # upper tail
+			lower_tail_ratio = (q5_individual - q1_individual) / (individual_stds[:, 0] + 1e-8)     # lower tail
+			
+			# Population-level statistics for distribution metrics
+			mean_skewness = jnp.mean(individual_skewness)
+			mean_kurtosis = jnp.mean(individual_kurtosis)
+			mean_uniformity_ratio = jnp.mean(uniformity_ratio)
+			mean_upper_tail_ratio = jnp.mean(upper_tail_ratio)
+			mean_lower_tail_ratio = jnp.mean(lower_tail_ratio)
+			
+			# Keep old global stats for backwards compatibility
+			flat_mean = jnp.mean(flat_params)
+			flat_min = jnp.min(flat_params)
+			flat_max = jnp.max(flat_params)
+			flat_var = jnp.var(flat_params)
+
 			diffs = flat_params[:, None, :] - flat_params[None, :, :]
 			pairwise_dists = jnp.linalg.norm(diffs, axis=-1)
 			iu0, iu1 = jnp.triu_indices(pop_size, k=1)
 			distances = pairwise_dists[iu0, iu1]
 			diversity = jnp.mean(distances)
-			self.logger.log(s, data, task_params, noise, diversity=diversity, current_gravity=0.0)
+			self.logger.log(s, data, task_params, noise, diversity=diversity, current_gravity=0.0, 
+						 flat_mean=flat_mean, flat_min=flat_min, flat_max=flat_max, flat_var=flat_var,
+						 mean_individual_mean=mean_individual_mean, mean_individual_min=mean_individual_min,
+						 mean_individual_max=mean_individual_max, mean_individual_var=mean_individual_var,
+						 var_individual_mean=var_individual_mean, var_individual_min=var_individual_min,
+						 var_individual_max=var_individual_max, var_individual_var=var_individual_var,
+						 mean_skewness=mean_skewness, mean_kurtosis=mean_kurtosis,
+						 mean_uniformity_ratio=mean_uniformity_ratio,
+						 mean_upper_tail_ratio=mean_upper_tail_ratio, mean_lower_tail_ratio=mean_lower_tail_ratio,
+						 individual_skewness=individual_skewness, individual_kurtosis=individual_kurtosis,
+						 uniformity_ratio=uniformity_ratio, flat_params_for_testing=flat_params)
 
 			return [s, k, task_params, should_stop, env_state, data["parameters"], data["fitness"]]
 
@@ -251,7 +329,7 @@ class BaseTrainer(eqx.Module):
 			new_carry = [new_state, new_key, new_task_params, new_should_stop, new_env_state]
 			
 			# Return (carry, output) pair as required by scan
-			return new_carry, (parameters, fitnesses)
+			return new_carry, (None, fitnesses)
 
 		# Run scan with early termination
 		(state, key, task_params, _, _), (archive_history, fitnesses_history) = jax.lax.scan(
@@ -259,7 +337,7 @@ class BaseTrainer(eqx.Module):
 			[state, key, task_params_init, False, init_env_state],  # Use list to match return type
 			jnp.arange(self.train_steps)
 		)
-		return (state, total_noise, archive_history, fitnesses_history)
+		return (state, total_noise, None, fitnesses_history)
 
 
 	def train_cont_(self, state: TrainState, key: jax.Array, data: Optional[Data]=None, init_env_state: Optional=None)->TrainState:
@@ -278,6 +356,8 @@ class BaseTrainer(eqx.Module):
 		# Initialize phase variables
 		task_params_init = 0
 		noise = jax.random.normal(key, (self.obs_size,)) * self.noise_range
+		#noise = 0*-1.021
+        
 		current_gravity = 1.0  # Start with normal gravity
 		
 		# Store the original environment for reference
@@ -346,7 +426,9 @@ class BaseTrainer(eqx.Module):
 			def _step_with_early_stop(carry, x):
 				state, key, task_params, should_stop, env_state, noise = carry
 				generation = x
-				new_noise = jax.random.uniform(key, (self.obs_size,), minval=-self.noise_range, maxval=self.noise_range)
+				new_noise = -0.39411 # new_noise = jax.random.uniform(key, (self.obs_size,), minval=-self.noise_range, maxval=self.noise_range)
+
+
 				noise = jax.numpy.where(generation % self.perturbe_every_n_gens == 0, new_noise, noise)
 				
 				new_carry = _step(generation, (state, key, task_params, env_state, noise))
@@ -362,7 +444,8 @@ class BaseTrainer(eqx.Module):
 			)
 			
 			# Update noise for next phase
-			noise = jax.random.normal(key, (self.obs_size,)) * self.noise_range
+			noise = jnp.array([-0.39411]*self.obs_size) # noise = jax.random.normal(key, (self.obs_size,)) * self.noise_range
+   
 		
 		return (state, noise, None, None)
 

@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import jax
 from scripts.train.base.visuals import viz_histogram, viz_heatmap
 from scripts.train.rl.ppo.hyperparams import hyperparams
+from scipy import stats
 from methods.evosax_wrapper.base.tasks.rl import EcorobotTask
 from methods.evosax_wrapper.direct_encodings.model import make_model
 from methods.evosax_wrapper.base.training.evolution import EvosaxTrainer
@@ -38,6 +39,12 @@ class EvosaxExperiment(Experiment):
 
     def __init__(self, env_config, model_config, exp_config, optimizer_config):
         super().__init__(env_config, model_config, exp_config, optimizer_config)
+        # Store weights history for PCA visualization
+        self.weights_history = []  # List of (generation, weights, fitnesses, best_indiv)
+        # Track first optimal solution for drift analysis
+        self.first_optimal_weights = None
+        self.first_optimal_gen = None
+        self.first_optimal_fitness = None
         
 
     def setup_trial_keys(self):
@@ -211,15 +218,56 @@ class EvosaxExperiment(Experiment):
 
 
 
-    def metrics_fn(self, log_info,  data, episode_length, task_params, num_nodes, num_edges, noise, current_gravity, n_dormant, diversity):
+    def metrics_fn(self, log_info,  data, episode_length, task_params, num_nodes, num_edges, noise, current_gravity, n_dormant, diversity, 
+				   flat_mean, flat_min, flat_max, flat_var,
+				   mean_individual_mean, mean_individual_min, mean_individual_max, mean_individual_var,
+				   var_individual_mean, var_individual_min, var_individual_max, var_individual_var,
+				   mean_skewness, mean_kurtosis, mean_uniformity_ratio,
+				   mean_upper_tail_ratio, mean_lower_tail_ratio,
+				   individual_skewness, individual_kurtosis, uniformity_ratio,
+				   flat_params_for_testing):
+        
+        # Create a file path for saving weights history (captured in closure)
+        try:
+            weights_history_file = self.config["exp_config"]["trial_dir"] + "/data/train/weights_history.pkl"
+        except:
+            weights_history_file = None
 
+        def callback(log_info, episode_length, task_params, data, num_nodes, num_edge, noise, current_gravity, n_dormant, diversity,
+					flat_mean, flat_min, flat_max, flat_var,
+					mean_individual_mean, mean_individual_min, mean_individual_max, mean_individual_var,
+					var_individual_mean, var_individual_min, var_individual_max, var_individual_var,
+					mean_skewness, mean_kurtosis, mean_uniformity_ratio,
+					mean_upper_tail_ratio, mean_lower_tail_ratio,
+					individual_skewness, individual_kurtosis, uniformity_ratio,
+					flat_params_for_testing):
+            fitnesses_np = onp.array(data["fitness"])
+            best_indiv = int(onp.argmax(fitnesses_np))
+            
+            # Extract generation counter before reassigning log_info
+            # log_info is a TrainState object that gets serialized, so we need to access it properly
+            if hasattr(log_info, 'gen_counter'):
+                generation = log_info.gen_counter
+            elif isinstance(log_info, dict) and 'gen_counter' in log_info:
+                generation = log_info['gen_counter']
+            else:
+                # Fallback: try to get it from the state if available
+                generation = 0  # Default fallback
 
-        def callback(log_info, episode_length,task_params, data, num_nodes, num_edge, noise, current_gravity, n_dormant, diversity      ):
-            best_indiv = int(onp.argmax(onp.array(data["fitness"])))
+            # Compute fitness statistics
+            fitness_mean = onp.mean(fitnesses_np)
+            fitness_max = onp.max(fitnesses_np)
+            fitness_min = onp.min(fitnesses_np)
+            fitness_var = onp.var(fitnesses_np)
+            fitness_std = onp.std(fitnesses_np)
 
             log_info = {
-                "current_best_fitness": onp.max(onp.array(data["fitness"])),
-                                "mean_fitness": onp.mean(onp.array(data["fitness"])),
+                "current_best_fitness": fitness_max,
+                "mean_fitness": fitness_mean,
+                "min_fitness": fitness_min,
+                "fitness_var": fitness_var,
+                "fitness_std": fitness_std,
+                "best_individual_index": best_indiv,
 
                 "mean episode_length": onp.mean(onp.mean(onp.array(episode_length), axis=1)),
                 "max episode_length": onp.max(onp.mean(onp.array(episode_length), axis=1)),
@@ -227,10 +275,30 @@ class EvosaxExperiment(Experiment):
                 "best indiv episode length": onp.mean(onp.array(episode_length)[best_indiv]),
 
 
-                "generation": log_info.gen_counter,
+                "generation": generation,
                 "current_task": task_params,
                 "current_gravity": current_gravity,
                 "diversity": diversity,
+                "flat_params/mean": float(onp.array(flat_mean)) if flat_mean is not None else None,
+                "flat_params/min": float(onp.array(flat_min)) if flat_min is not None else None,
+                "flat_params/max": float(onp.array(flat_max)) if flat_max is not None else None,
+                "flat_params/var": float(onp.array(flat_var)) if flat_var is not None else None,
+                # Per-individual statistics (mean across population)
+                "individual/mean_of_means": float(onp.array(mean_individual_mean)) if mean_individual_mean is not None else None,
+                "individual/mean_of_mins": float(onp.array(mean_individual_min)) if mean_individual_min is not None else None,
+                "individual/mean_of_maxs": float(onp.array(mean_individual_max)) if mean_individual_max is not None else None,
+                "individual/mean_of_vars": float(onp.array(mean_individual_var)) if mean_individual_var is not None else None,
+                # Variance across population (how much individuals differ)
+                "individual/var_of_means": float(onp.array(var_individual_mean)) if var_individual_mean is not None else None,
+                "individual/var_of_mins": float(onp.array(var_individual_min)) if var_individual_min is not None else None,
+                "individual/var_of_maxs": float(onp.array(var_individual_max)) if var_individual_max is not None else None,
+                "individual/var_of_vars": float(onp.array(var_individual_var)) if var_individual_var is not None else None,
+                # Distribution shape metrics
+                "dist/skewness": float(onp.array(mean_skewness)) if mean_skewness is not None else None,
+                "dist/kurtosis": float(onp.array(mean_kurtosis)) if mean_kurtosis is not None else None,
+                "dist/uniformity_ratio": float(onp.array(mean_uniformity_ratio)) if mean_uniformity_ratio is not None else None,
+                "dist/upper_tail_ratio": float(onp.array(mean_upper_tail_ratio)) if mean_upper_tail_ratio is not None else None,
+                "dist/lower_tail_ratio": float(onp.array(mean_lower_tail_ratio)) if mean_lower_tail_ratio is not None else None,
                 #"navigability": log_info.navig,
                 #"navigability_online": log_info.navig_online,
                 #"robustness_fitness": log_info.robustness_fitness,
@@ -280,6 +348,257 @@ class EvosaxExperiment(Experiment):
                         
                     
             log_info["deepest_level"] = max_level
+            
+            # Save weights history for PCA visualization (generation already extracted above)
+            if flat_params_for_testing is not None and weights_history_file is not None:
+                flat_params_np = onp.array(flat_params_for_testing)
+                fitnesses_np = onp.array(data["fitness"])
+                best_indiv = int(onp.argmax(fitnesses_np))
+                current_best_weights = flat_params_np[best_indiv, :]
+                
+                # Compute distance from previous best individual
+                prev_best_file = weights_history_file.replace("weights_history.pkl", "previous_best_weights.pkl")
+                distance_metrics = {}
+                
+                try:
+                    # Compute weight statistics needed for normalization
+                    avg_weight_magnitude = onp.mean(onp.abs(current_best_weights))
+                    norm_current = onp.linalg.norm(current_best_weights)
+                    
+                    if os.path.exists(prev_best_file):
+                        with open(prev_best_file, "rb") as f:
+                            prev_best_data = pickle.load(f)
+                            prev_best_weights = prev_best_data['weights']
+                            prev_gen = prev_best_data['generation']
+                            
+                            # Compute various distance metrics
+                            # L2 distance (Euclidean)
+                            l2_distance = onp.linalg.norm(current_best_weights - prev_best_weights)
+                            distance_metrics['best_diff/l2_distance'] = float(l2_distance)
+                            
+                            # Normalized L2 distance (relative to weight magnitude)
+                            normalized_l2 = l2_distance / (avg_weight_magnitude * len(current_best_weights) + 1e-8)
+                            distance_metrics['best_diff/normalized_l2'] = float(normalized_l2)
+                            
+                            # Cosine similarity (1 = identical, 0 = orthogonal, -1 = opposite)
+                            dot_product = onp.dot(current_best_weights, prev_best_weights)
+                            norm_prev = onp.linalg.norm(prev_best_weights)
+                            cosine_sim = dot_product / (norm_current * norm_prev + 1e-8)
+                            distance_metrics['best_diff/cosine_similarity'] = float(cosine_sim)
+                            distance_metrics['best_diff/cosine_distance'] = float(1.0 - cosine_sim)  # Distance = 1 - similarity
+                            
+                            # Mean absolute difference
+                            mean_abs_diff = onp.mean(onp.abs(current_best_weights - prev_best_weights))
+                            distance_metrics['best_diff/mean_abs_diff'] = float(mean_abs_diff)
+                            
+                            # Max absolute difference
+                            max_abs_diff = onp.max(onp.abs(current_best_weights - prev_best_weights))
+                            distance_metrics['best_diff/max_abs_diff'] = float(max_abs_diff)
+                            
+                            # Generation gap
+                            distance_metrics['best_diff/generations_since_update'] = generation - prev_gen
+                            
+                            log_info.update(distance_metrics)
+                    else:
+                        # First generation - no previous best to compare
+                        distance_metrics['best_diff/l2_distance'] = 0.0
+                        distance_metrics['best_diff/normalized_l2'] = 0.0
+                        distance_metrics['best_diff/cosine_similarity'] = 1.0
+                        distance_metrics['best_diff/cosine_distance'] = 0.0
+                        distance_metrics['best_diff/mean_abs_diff'] = 0.0
+                        distance_metrics['best_diff/max_abs_diff'] = 0.0
+                        distance_metrics['best_diff/generations_since_update'] = 0
+                        log_info.update(distance_metrics)
+                    
+                    # Save current best as previous best for next generation
+                    with open(prev_best_file, "wb") as f:
+                        pickle.dump({
+                            'generation': generation,
+                            'weights': current_best_weights.copy(),
+                            'fitness': float(fitnesses_np[best_indiv])
+                        }, f)
+                    
+                    # Track drift from first optimal solution
+                    current_best_fitness = float(fitnesses_np[best_indiv])
+                    
+                    # Check if we've reached a new maximum fitness (first optimal solution)
+                    if (self.first_optimal_weights is None or 
+                        current_best_fitness > self.first_optimal_fitness):
+                        # This is the first time we've reached this fitness level
+                        self.first_optimal_weights = current_best_weights.copy()
+                        self.first_optimal_gen = generation
+                        self.first_optimal_fitness = current_best_fitness
+                    
+                    # Compute distance from current best to first optimal solution
+                    if self.first_optimal_weights is not None:
+                        drift_l2 = onp.linalg.norm(current_best_weights - self.first_optimal_weights)
+                        drift_normalized = drift_l2 / (avg_weight_magnitude * len(current_best_weights) + 1e-8)
+                        
+                        dot_product_drift = onp.dot(current_best_weights, self.first_optimal_weights)
+                        norm_first = onp.linalg.norm(self.first_optimal_weights)
+                        cosine_sim_drift = dot_product_drift / (norm_current * norm_first + 1e-8)
+                        
+                        drift_mean_abs = onp.mean(onp.abs(current_best_weights - self.first_optimal_weights))
+                        
+                        log_info["drift_from_first_optimal/l2_distance"] = float(drift_l2)
+                        log_info["drift_from_first_optimal/normalized_l2"] = float(drift_normalized)
+                        log_info["drift_from_first_optimal/cosine_similarity"] = float(cosine_sim_drift)
+                        log_info["drift_from_first_optimal/cosine_distance"] = float(1.0 - cosine_sim_drift)
+                        log_info["drift_from_first_optimal/mean_abs_diff"] = float(drift_mean_abs)
+                        log_info["drift_from_first_optimal/generations_since_optimal"] = generation - self.first_optimal_gen
+                    
+                except Exception as e:
+                    print(f"Warning: Could not compute/save best individual difference: {e}")
+                
+                # Save to pickle file (append mode - load, update, save)
+                try:
+                    if os.path.exists(weights_history_file):
+                        with open(weights_history_file, "rb") as f:
+                            weights_history = pickle.load(f)
+                    else:
+                        weights_history = []
+                    
+                    weights_history.append({
+                        'generation': generation,
+                        'weights': flat_params_np.copy(),  # (pop_size, num_params)
+                        'fitnesses': fitnesses_np.copy(),
+                        'best_indiv': best_indiv
+                    })
+                    
+                    with open(weights_history_file, "wb") as f:
+                        pickle.dump(weights_history, f)
+                except Exception as e:
+                    print(f"Warning: Could not save weights history: {e}")
+            
+            # Classify individuals by distribution type and count
+            # Statistical tests for uniform, normal, and power-law distributions
+            if (flat_params_for_testing is not None and 
+                individual_skewness is not None and 
+                individual_kurtosis is not None and 
+                uniformity_ratio is not None):
+                
+                flat_params_np = onp.array(flat_params_for_testing)
+                pop_size = flat_params_np.shape[0]
+                skewness_np = onp.array(individual_skewness)
+                kurtosis_np = onp.array(individual_kurtosis)
+                uniformity_np = onp.array(uniformity_ratio)
+                
+                # Use statistical tests to determine distribution type
+                # Test each individual's weights against uniform, normal, and power-law distributions
+                pvalue_threshold = 0.05  # Significance level for rejecting null hypothesis
+                
+                count_normal = 0
+                count_uniform = 0
+                count_powerlaw = 0
+                count_other = 0
+                
+                # Store p-values for debugging
+                pvalues_uniform = []
+                pvalues_normal = []
+                
+                for idx in range(pop_size):
+                    individual_weights = flat_params_np[idx, :]
+                    
+                    # Test 1: Kolmogorov-Smirnov test against uniform distribution
+                    # Normalize weights to [0, 1] using observed min/max
+                    # This tests if the distribution is uniform within its current range
+                    min_w = individual_weights.min()
+                    max_w = individual_weights.max()
+                    uniform_pvalue = None
+                    if max_w > min_w and len(individual_weights) > 1:
+                        normalized_uniform = (individual_weights - min_w) / (max_w - min_w)
+                        try:
+                            _, uniform_pvalue = stats.kstest(normalized_uniform, 'uniform')
+                            pvalues_uniform.append(uniform_pvalue)
+                        except:
+                            uniform_pvalue = None
+                    
+                    # Test 2: Test against normal distribution
+                    # Normalize to standard normal (mean=0, std=1)
+                    mean_w = individual_weights.mean()
+                    std_w = individual_weights.std()
+                    normal_pvalue = None
+                    if std_w > 1e-8 and len(individual_weights) > 1:
+                        normalized_normal = (individual_weights - mean_w) / std_w
+                        try:
+                            # Use Shapiro-Wilk for small samples, KS for larger
+                            if len(normalized_normal) <= 5000:
+                                _, normal_pvalue = stats.shapiro(normalized_normal)
+                            else:
+                                # For large samples, use KS test
+                                _, normal_pvalue = stats.kstest(normalized_normal, 'norm')
+                            pvalues_normal.append(normal_pvalue)
+                        except:
+                            normal_pvalue = None
+                    
+                    # Test 3: Test for power-law using tail analysis
+                    # Power-law has heavy tails - check if upper tail follows power-law
+                    # Sort absolute values and check tail behavior
+                    abs_weights_sorted = onp.sort(onp.abs(individual_weights))[::-1]  # Descending
+                    n_tail = max(10, len(abs_weights_sorted) // 20)  # Use top 5% for tail
+                    tail_weights = abs_weights_sorted[:n_tail]
+                    
+                    powerlaw_pvalue = None
+                    if len(tail_weights) > 3 and tail_weights[0] > 0:
+                        # Test if log(tail) vs log(rank) is linear (power-law signature)
+                        ranks = onp.arange(1, len(tail_weights) + 1, dtype=float)
+                        log_ranks = onp.log(ranks)
+                        log_tail = onp.log(tail_weights + 1e-10)  # Add small epsilon to avoid log(0)
+                        
+                        # Fit linear regression: log(tail) = a + b*log(rank)
+                        # Power-law would have b ≈ -α (negative slope)
+                        try:
+                            from scipy.stats import linregress
+                            slope, intercept, r_value, p_value, std_err = linregress(log_ranks, log_tail)
+                            # For power-law, we expect negative slope and good fit (high |r|)
+                            # Use p-value from regression as indicator
+                            # If slope is significantly negative and R² is high, likely power-law
+                            powerlaw_pvalue = 1.0 - abs(r_value)  # Lower when correlation is high
+                        except:
+                            powerlaw_pvalue = None
+                    
+                    # Classify based on p-values: accept distribution if p-value > threshold
+                    # Choose the distribution with highest p-value (least rejected)
+                    classifications = {}
+                    if uniform_pvalue is not None:
+                        classifications['uniform'] = uniform_pvalue
+                    if normal_pvalue is not None:
+                        classifications['normal'] = normal_pvalue
+                    if powerlaw_pvalue is not None:
+                        classifications['powerlaw'] = powerlaw_pvalue
+                    
+                    # If we have test results, choose the best fit
+                    if classifications:
+                        best_dist = max(classifications, key=classifications.get)
+                        best_pvalue = classifications[best_dist]
+                        
+                        # Only classify if p-value suggests we can't reject the hypothesis
+                        if best_pvalue > pvalue_threshold:
+                            if best_dist == 'uniform':
+                                count_uniform += 1
+                            elif best_dist == 'normal':
+                                count_normal += 1
+                            elif best_dist == 'powerlaw':
+                                count_powerlaw += 1
+                        else:
+                            # All tests rejected - doesn't fit any standard distribution
+                            count_other += 1
+                    else:
+                        count_other += 1
+                
+                # Log summary statistics of p-values
+                if pvalues_uniform:
+                    log_info["dist_test/mean_uniform_pvalue"] = float(onp.mean(pvalues_uniform))
+                    log_info["dist_test/min_uniform_pvalue"] = float(onp.min(pvalues_uniform))
+                if pvalues_normal:
+                    log_info["dist_test/mean_normal_pvalue"] = float(onp.mean(pvalues_normal))
+                    log_info["dist_test/min_normal_pvalue"] = float(onp.min(pvalues_normal))
+                
+                log_info["dist_count/normal"] = count_normal
+                log_info["dist_count/uniform"] = count_uniform
+                log_info["dist_count/powerlaw"] = count_powerlaw
+                log_info["dist_count/other"] = count_other
+                log_info["dist_count/total"] = pop_size
 
             wandb.log(log_info)
             
@@ -289,8 +608,15 @@ class EvosaxExperiment(Experiment):
                 else:
                     if value > 0.0:
                         print(key, value)
-
-        jax.debug.callback(callback, log_info, episode_length,task_params, data, num_nodes, num_edges, noise, current_gravity, n_dormant, diversity)
+            
+        jax.debug.callback(callback, log_info, episode_length, task_params, data, num_nodes, num_edges, noise, current_gravity, n_dormant, diversity,
+						   flat_mean, flat_min, flat_max, flat_var,
+						   mean_individual_mean, mean_individual_min, mean_individual_max, mean_individual_var,
+						   var_individual_mean, var_individual_min, var_individual_max, var_individual_var,
+						   mean_skewness, mean_kurtosis, mean_uniformity_ratio,
+						   mean_upper_tail_ratio, mean_lower_tail_ratio,
+						   individual_skewness, individual_kurtosis, uniformity_ratio,
+						   flat_params_for_testing)
 
     def eval_task(self, best_member, tasks, gens, final_policy=False):
 
@@ -521,8 +847,116 @@ class EvosaxExperiment(Experiment):
 
         self.final_state = {"params": final_info.best_member}
         
+        # Create PCA visualization after training
+        self.create_pca_visualization()
         
         
+    def create_pca_visualization(self):
+        """Create 2D PCA visualization of weight evolution across generations."""
+        try:
+            weights_history_file = self.config["exp_config"]["trial_dir"] + "/data/train/weights_history.pkl"
+            
+            if not os.path.exists(weights_history_file):
+                print("Warning: weights_history.pkl not found, skipping PCA visualization")
+                return
+            
+            # Load weights history
+            with open(weights_history_file, "rb") as f:
+                weights_history = pickle.load(f)
+            
+            if not weights_history:
+                print("Warning: weights_history is empty, skipping PCA visualization")
+                return
+            
+            print(f"Creating PCA visualization from {len(weights_history)} generations...")
+            
+            # Collect all weights across all generations
+            all_weights = []
+            generation_labels = []
+            individual_indices = []
+            is_best = []
+            
+            for gen_data in weights_history:
+                gen = gen_data['generation']
+                weights = gen_data['weights']  # (pop_size, num_params)
+                best_idx = gen_data['best_indiv']
+                
+                pop_size = weights.shape[0]
+                for idx in range(pop_size):
+                    all_weights.append(weights[idx, :])
+                    generation_labels.append(gen)
+                    individual_indices.append(idx)
+                    is_best.append(idx == best_idx)
+            
+            # Convert to numpy array
+            all_weights = onp.array(all_weights)  # (total_individuals, num_params)
+            
+            # Perform PCA
+            from sklearn.decomposition import PCA
+            pca = PCA(n_components=2)
+            weights_2d = pca.fit_transform(all_weights)
+            
+            print(f"PCA explained variance ratio: {pca.explained_variance_ratio_}")
+            print(f"Total explained variance: {sum(pca.explained_variance_ratio_):.4f}")
+            
+            # Create visualization
+            import matplotlib.pyplot as plt
+            import matplotlib.colors as mcolors
+            
+            fig, ax = plt.subplots(figsize=(12, 10))
+            
+            # Get unique generations and create color map
+            unique_gens = sorted(set(generation_labels))
+            colors = plt.cm.viridis(onp.linspace(0, 1, len(unique_gens)))
+            gen_to_color = {gen: colors[i] for i, gen in enumerate(unique_gens)}
+            
+            # Plot each generation separately
+            for gen in unique_gens:
+                gen_mask = onp.array(generation_labels) == gen
+                gen_weights_2d = weights_2d[gen_mask]
+                gen_is_best = onp.array(is_best)[gen_mask]
+                
+                # Plot regular individuals
+                regular_mask = ~gen_is_best
+                if regular_mask.any():
+                    ax.scatter(weights_2d[gen_mask][regular_mask, 0], 
+                             weights_2d[gen_mask][regular_mask, 1],
+                             c=[gen_to_color[gen]], alpha=0.4, s=20,
+                             label=f'Gen {gen}' if gen == unique_gens[0] or gen % max(1, len(unique_gens)//10) == 0 else '',
+                             edgecolors='none')
+                
+                # Highlight best individual with a star
+                best_mask = gen_is_best
+                if best_mask.any():
+                    best_weights_2d = gen_weights_2d[best_mask]
+                    ax.scatter(best_weights_2d[:, 0], best_weights_2d[:, 1],
+                             c='red', marker='*', s=300, alpha=0.9,
+                             edgecolors='black', linewidths=1.5,
+                             zorder=10)
+            
+            ax.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]*100:.2f}% variance)', fontsize=12)
+            ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]*100:.2f}% variance)', fontsize=12)
+            ax.set_title('Weight Evolution: PCA Visualization\n(Red stars = best individuals per generation)', fontsize=14, fontweight='bold')
+            ax.grid(True, alpha=0.3)
+            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8, ncol=2)
+            
+            plt.tight_layout()
+            
+            # Save figure
+            pca_plot_path = self.config["exp_config"]["trial_dir"] + "/data/train/pca_evolution.png"
+            plt.savefig(pca_plot_path, dpi=300, bbox_inches='tight')
+            print(f"PCA visualization saved to: {pca_plot_path}")
+            
+            plt.close()
+            
+        except ImportError:
+            print("Warning: sklearn or matplotlib not available, skipping PCA visualization")
+            print("Install with: pip install scikit-learn matplotlib")
+        except Exception as e:
+            print(f"Warning: Could not create PCA visualization: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def save_params(self, training_state):
 
         def callback(info):

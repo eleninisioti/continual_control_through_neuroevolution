@@ -129,11 +129,11 @@ def train_classic_control_all(num_trials, optimizer):
     
 def train_classic_control_parameteric(num_trials, optimizer):
     n_gens = [5,10, 20, 50, 100, 200, 500, 100]
-    #n_gens = [500, 1000]
+    n_gens = [100]
     for perturbe_every_n_gens in n_gens:
-        train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+        #train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  population_size=512, noise_range=0.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
         train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
-        train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+        #train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
         
         
 
