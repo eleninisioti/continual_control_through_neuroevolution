@@ -129,11 +129,12 @@ def train_classic_control_all(num_trials, optimizer):
     
 def train_classic_control_parameteric(num_trials, optimizer):
     n_gens = [5,10, 20, 50, 100, 200][::-1]
-    #n_gens = [100]
+    #n_gens = [200]
+    n_gens = [5,200]
     for perturbe_every_n_gens in n_gens:
-        #train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
-        #train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
-        train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=0.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+        train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+        train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+        #train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
         
         
 
@@ -152,7 +153,7 @@ def train_kinetix_lifelong(num_trials, optimizer):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="This script trains Proximal Policy Optimisation on the stepping gates and ecorobot benchmarks")
-    parser.add_argument("--num_trials", type=int, help="Number of trials", default=1)
+    parser.add_argument("--num_trials", type=int, help="Number of trials", default=5)
     parser.add_argument("--optimizer", type=str, help="Choose between SimpleGA and OpenES", default="SimpleGA")
     args = parser.parse_args()
     

@@ -124,7 +124,7 @@ class BaseTrainer(eqx.Module):
 		print("perturbe_every_n_gens", self.perturbe_every_n_gens)
 		print("num_tasks", num_tasks)
 		quit()
-		total_noise = jnp.ones((num_tasks,self.obs_size))*0.76 #jax.random.normal(key, (num_tasks,self.obs_size))*self.noise_range
+		total_noise = jax.random.normal(key, (num_tasks,self.obs_size))*self.noise_range
 
 
 		
@@ -299,7 +299,7 @@ class BaseTrainer(eqx.Module):
 		task_params_init = 0
 		#keys = jr.split(key, 10)
 		num_tasks = int(self.train_steps / self.perturbe_every_n_gens) + 50
-		total_noise =jnp.ones((num_tasks,self.obs_size))*0.76 #jax.random.normal(key, (num_tasks,self.obs_size))*self.noise_range
+		total_noise = jax.random.normal(key, (num_tasks,self.obs_size))*self.noise_range
 
 		# Use scan with early termination support
 		

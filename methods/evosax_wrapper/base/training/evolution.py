@@ -189,6 +189,8 @@ class EvosaxTrainer(BaseTrainer):
 
 
 		fitness, eval_data, interm_policies, temp_task_paramsm, env_state = self.eval(x, eval_key, task_params, current_gen, env_state, noise)
+  
+		
 
 		def change_task(env_params):
 			new_task = jnp.minimum(env_params + 1, self.num_tasks ).astype(jnp.int32)

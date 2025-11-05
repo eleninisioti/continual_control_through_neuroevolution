@@ -350,6 +350,7 @@ class EvosaxExperiment(Experiment):
             log_info["deepest_level"] = max_level
             
             # Save weights history for PCA visualization (generation already extracted above)
+            """
             if flat_params_for_testing is not None and weights_history_file is not None:
                 flat_params_np = onp.array(flat_params_for_testing)
                 fitnesses_np = onp.array(data["fitness"])
@@ -449,6 +450,7 @@ class EvosaxExperiment(Experiment):
                     
                 except Exception as e:
                     print(f"Warning: Could not compute/save best individual difference: {e}")
+                
                 
                 # Save to pickle file (append mode - load, update, save)
                 try:
@@ -599,6 +601,7 @@ class EvosaxExperiment(Experiment):
                 log_info["dist_count/powerlaw"] = count_powerlaw
                 log_info["dist_count/other"] = count_other
                 log_info["dist_count/total"] = pop_size
+            """
 
             wandb.log(log_info)
             

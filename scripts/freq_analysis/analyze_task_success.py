@@ -142,19 +142,33 @@ def analyze_task(task_name, data_dir, frequencies, success_threshold, title, use
     
     # Always calculate average generations (even if empty)
     if len(results_df) > 0:
-        avg_gens_per_freq = results_df.groupby('frequency')['generations_to_success'].mean().reset_index()
-        avg_gens_per_freq.columns = ['frequency', 'avg_generations_to_success']
+        avg_gens_per_freq = results_df.groupby('frequency')['generations_to_success'].agg(['mean', 'std', 'count']).reset_index()
+        avg_gens_per_freq.columns = ['frequency', 'avg_generations_to_success', 'std_generations_to_success', 'n_successes']
+        
+        # Calculate standard error and confidence intervals
+        avg_gens_per_freq['se_generations_to_success'] = avg_gens_per_freq['std_generations_to_success'] / np.sqrt(avg_gens_per_freq['n_successes'])
+        # Use t-distribution for confidence intervals
+        confidence = 0.95
+        # Handle case where n_successes = 1 (df = 0, use normal distribution instead)
+        df = np.maximum(1, avg_gens_per_freq['n_successes'] - 1)
+        t_critical = stats.t.ppf((1 + confidence) / 2, df)
+        avg_gens_per_freq['ci_lower_gens'] = avg_gens_per_freq['avg_generations_to_success'] - t_critical * avg_gens_per_freq['se_generations_to_success']
+        avg_gens_per_freq['ci_upper_gens'] = avg_gens_per_freq['avg_generations_to_success'] + t_critical * avg_gens_per_freq['se_generations_to_success']
         
         # Merge with success_rate_df to ensure all frequencies are represented
         # Set NaN for frequencies with no successes
-        success_rate_df = success_rate_df.merge(avg_gens_per_freq, on='frequency', how='left')
+        success_rate_df = success_rate_df.merge(avg_gens_per_freq[['frequency', 'avg_generations_to_success', 'ci_lower_gens', 'ci_upper_gens']], on='frequency', how='left')
         success_rate_df['avg_generations_to_success'] = success_rate_df['avg_generations_to_success'].fillna(np.nan)
+        success_rate_df['ci_lower_gens'] = success_rate_df['ci_lower_gens'].fillna(np.nan)
+        success_rate_df['ci_upper_gens'] = success_rate_df['ci_upper_gens'].fillna(np.nan)
         
         print("\nAverage generations to success per frequency:")
         print(success_rate_df[['frequency', 'avg_generations_to_success']])
     else:
         # No successes at all - set all to NaN
         success_rate_df['avg_generations_to_success'] = np.nan
+        success_rate_df['ci_lower_gens'] = np.nan
+        success_rate_df['ci_upper_gens'] = np.nan
         print("\nNo successful task completions - cannot calculate average generations to success.")
     
     # Calculate confidence intervals for success rates (always do this)
@@ -201,9 +215,28 @@ def analyze_task(task_name, data_dir, frequencies, success_threshold, title, use
         # Plot 2: Average generations to success
         # Handle NaN values by creating a boolean mask
         valid_gens = ~np.isnan(success_rate_df['avg_generations_to_success'])
-        bars = ax2.bar(np.where(valid_gens)[0], 
-                      success_rate_df.loc[valid_gens, 'avg_generations_to_success'],
-                      color='coral', alpha=0.7)
+        x_pos_valid = np.where(valid_gens)[0]
+        
+        if len(x_pos_valid) > 0:
+            bars = ax2.bar(x_pos_valid, 
+                          success_rate_df.loc[valid_gens, 'avg_generations_to_success'],
+                          color='coral', alpha=0.7)
+            
+            # Add error bars for valid generations
+            yerr_lower = np.maximum(0, 
+                success_rate_df.loc[valid_gens, 'avg_generations_to_success'] - 
+                success_rate_df.loc[valid_gens, 'ci_lower_gens']
+            )
+            yerr_upper = np.maximum(0,
+                success_rate_df.loc[valid_gens, 'ci_upper_gens'] - 
+                success_rate_df.loc[valid_gens, 'avg_generations_to_success']
+            )
+            
+            ax2.errorbar(x_pos_valid, 
+                        success_rate_df.loc[valid_gens, 'avg_generations_to_success'],
+                        yerr=[yerr_lower, yerr_upper],
+                        fmt='none', color='black', capsize=5, elinewidth=1.5)
+        
         # Add gray bars for NaN values
         invalid_gens = np.isnan(success_rate_df['avg_generations_to_success'])
         if invalid_gens.any():
@@ -236,6 +269,27 @@ def main():
     base_dir = Path('/home/eleni/workspace/continual_control_through_neuroevolution/scripts/freq_analysis')
     data_dir = "freq_anal"
     
+    # Analyze Cartpole PPO
+    cartpole_ppo_dir = base_dir / data_dir / 'cartpole' / 'ppo'
+    cartpole_ppo_frequencies = [5, 20, 50, 100, 200]
+    analyze_task('cartpole_ppo', cartpole_ppo_dir, cartpole_ppo_frequencies, 198, 'Cartpole PPO', use_greater_than_or_equal=False)
+    
+  
+    
+      # Analyze Acrobot PPO
+    acrobot_ppo_dir = base_dir / data_dir / 'acrobot' / 'ppo'
+    acrobot_ppo_frequencies = [5, 10, 20, 50, 100, 200]
+    analyze_task('acrobot_ppo', acrobot_ppo_dir, acrobot_ppo_frequencies, -80, 'Acrobot PPO', use_greater_than_or_equal=False)
+    
+  
+        # Analyze Acrobot PPO
+    mountaincar_ppo_dir = base_dir / data_dir / 'mountaincar' / 'ppo'
+    mountaincar_ppo_frequencies = [5, 10, 20, 50, 100, 200]
+    analyze_task('mountaincar_ppo', mountaincar_ppo_dir, mountaincar_ppo_frequencies, -139, 'Mountaincar PPO', use_greater_than_or_equal=False)
+    
+  
+    
+    
       # Analyze Cartpole GA (use >= since goal is exactly 199)
     cartpole_ga_dir = base_dir / data_dir / 'cartpole' / 'ga'
     cartpole_frequencies = [5, 20, 50, 100, 200, 500]
@@ -247,14 +301,16 @@ def main():
     mountaincar_frequencies = [5, 10, 50, 100, 200, 500, 1000]
     analyze_task('mountaincar_ga', mountaincar_ga_dir, mountaincar_frequencies, -130, 'Mountaincar GA', use_greater_than_or_equal=False)
 
-  
-    quit()
     # Analyze Acrobot GA
+    data_dir = "data_old"
     acrobot_ga_dir = base_dir / data_dir / 'acrobot' / 'ga'
     acrobot_frequencies = [5, 10, 20, 50, 100, 200]
     analyze_task('acrobot_ga', acrobot_ga_dir, acrobot_frequencies, -80, 'Acrobot GA', use_greater_than_or_equal=False)
     
-    # Analyze Acrobot PPO
+ 
+  
+    quit()
+     # Analyze Acrobot PPO
     acrobot_ppo_dir = base_dir / data_dir / 'acrobot' / 'ppo'
     acrobot_ppo_frequencies = [10, 20]
     analyze_task('acrobot_ppo', acrobot_ppo_dir, acrobot_ppo_frequencies, -80, 'Acrobot PPO', use_greater_than_or_equal=False)
