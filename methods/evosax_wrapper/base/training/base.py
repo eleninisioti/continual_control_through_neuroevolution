@@ -166,7 +166,7 @@ class BaseTrainer(eqx.Module):
 		return (state, total_noise)
 
 
-	def train_gymnax_(self, state: TrainState, key: jax.Array, data: Optional[Data]=None, init_env_state: Optional=None)->TrainState:
+	def train_(self, state: TrainState, key: jax.Array, data: Optional[Data]=None, init_env_state: Optional=None)->TrainState:
      
      
 		original_env = self.task_keep.env
@@ -270,6 +270,9 @@ class BaseTrainer(eqx.Module):
 			flat_min = jnp.min(flat_params)
 			flat_max = jnp.max(flat_params)
 			flat_var = jnp.var(flat_params)
+			temp_min = jnp.min(flat_params, axis=1, keepdims=True)
+			temp_max = jnp.max(flat_params, axis=1, keepdims=True)
+			flat_params = (flat_params - temp_min) / (temp_max - temp_min)
 
 			diffs = flat_params[:, None, :] - flat_params[None, :, :]
 			pairwise_dists = jnp.linalg.norm(diffs, axis=-1)
@@ -284,6 +287,7 @@ class BaseTrainer(eqx.Module):
 						 var_individual_max=var_individual_max, var_individual_var=var_individual_var,
 						 mean_skewness=mean_skewness, mean_kurtosis=mean_kurtosis,
 						 mean_uniformity_ratio=mean_uniformity_ratio,
+       behaviroral_diversity=data["behaviroral_diversity"],
 						 mean_upper_tail_ratio=mean_upper_tail_ratio, mean_lower_tail_ratio=mean_lower_tail_ratio,
 						 individual_skewness=individual_skewness, individual_kurtosis=individual_kurtosis,
 						 uniformity_ratio=uniformity_ratio, flat_params_for_testing=flat_params)
@@ -340,7 +344,7 @@ class BaseTrainer(eqx.Module):
 		return (state, total_noise, None, fitnesses_history)
 
 
-	def train_(self, state: TrainState, key: jax.Array, data: Optional[Data]=None, init_env_state: Optional=None)->TrainState:
+	def train_brax_(self, state: TrainState, key: jax.Array, data: Optional[Data]=None, init_env_state: Optional=None)->TrainState:
 		"""
 		Modified training function that uses 10 phases instead of one big loop.
 		Each phase samples a new gravity value, updates the XML file, and creates a new environment.

@@ -239,8 +239,10 @@ class GymnaxTaskWithPerturbation(eqx.Module):
         key: jax.Array, 
         task_params: Optional[TaskParams]=None,
         current_gen: int=0, env_state: Optional=None, noise=None)->Tuple[Float, PyTree]:
-
+        
         _, _, data, policy_states= self.rollout(params, key, current_gen=current_gen, noise=noise)
+        
+
         return jnp.sum(data["reward"]), data, policy_states, 0.0, None
 
  
@@ -321,7 +323,22 @@ class GymnaxTaskWithPerturbation(eqx.Module):
         data["n_dormant"] = jnp.mean(states.policy_state.n_dormant[:,0])
 
   
+        def flatten_env_state_without_time(env_state):
+            leaves, _ = jax.tree_util.tree_flatten_with_path(env_state)
+            chunks = []
+            for path, leaf in leaves:
+                # last entry in the path corresponds to the field/key name
+                if isinstance(path[-1], jax.tree_util.GetAttrKey) and path[-1].name == "time":
+                    continue
+                if isinstance(path[-1], jax.tree_util.DictKey) and path[-1].key == "time":
+                    continue
+                chunks.append(leaf.reshape(leaf.shape[0], -1))
+            return jnp.concatenate(chunks, axis=1)
 
+        
+        env_state = states.env_state.env_state  # whatever tree you mentioned
+        features = flatten_env_state_without_time(env_state)
+        data["features"] = features.reshape(-1)
         data["actions"]  = actions
         return state, states, data, policy_states
 

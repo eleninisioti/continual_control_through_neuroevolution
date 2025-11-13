@@ -235,7 +235,7 @@ class EvosaxExperiment(Experiment):
 
 
 
-    def metrics_fn(self, log_info,  data, episode_length, task_params, num_nodes, num_edges, noise, current_gravity, n_dormant, diversity, 
+    def metrics_fn(self, log_info,  data,behaviroral_diversity, episode_length, task_params, num_nodes, num_edges, noise, current_gravity, n_dormant, diversity, 
 				   flat_mean, flat_min, flat_max, flat_var,
 				   mean_individual_mean, mean_individual_min, mean_individual_max, mean_individual_var,
 				   var_individual_mean, var_individual_min, var_individual_max, var_individual_var,
@@ -250,7 +250,7 @@ class EvosaxExperiment(Experiment):
         except:
             weights_history_file = None
 
-        def callback(log_info, episode_length, task_params, data, num_nodes, num_edge, noise, current_gravity, n_dormant, diversity,
+        def callback(log_info, behaviroral_diversity, episode_length, task_params, data, num_nodes, num_edge, noise, current_gravity, n_dormant, diversity,
 					flat_mean, flat_min, flat_max, flat_var,
 					mean_individual_mean, mean_individual_min, mean_individual_max, mean_individual_var,
 					var_individual_mean, var_individual_min, var_individual_max, var_individual_var,
@@ -285,6 +285,7 @@ class EvosaxExperiment(Experiment):
                 "fitness_var": fitness_var,
                 "fitness_std": fitness_std,
                 "best_individual_index": best_indiv,
+                "behaviroral_diversity": behaviroral_diversity,
 
                 "mean episode_length": onp.mean(onp.mean(onp.array(episode_length), axis=1)),
                 "max episode_length": onp.max(onp.mean(onp.array(episode_length), axis=1)),
@@ -629,7 +630,7 @@ class EvosaxExperiment(Experiment):
                     if value > 0.0:
                         print(key, value)
             
-        jax.debug.callback(callback, log_info, episode_length, task_params, data, num_nodes, num_edges, noise, current_gravity, n_dormant, diversity,
+        jax.debug.callback(callback, log_info, behaviroral_diversity, episode_length, task_params, data, num_nodes, num_edges, noise, current_gravity, n_dormant, diversity,
 						   flat_mean, flat_min, flat_max, flat_var,
 						   mean_individual_mean, mean_individual_min, mean_individual_max, mean_individual_var,
 						   var_individual_mean, var_individual_min, var_individual_max, var_individual_var,
@@ -765,14 +766,14 @@ class EvosaxExperiment(Experiment):
         trainer = EvosaxTrainer(train_steps=self.config["optimizer_config"]["optimizer_params"]["generations"],
                                 task=self.env,
                                 save_params_fn=self.save_params,
-                                #perturbe_every_n_gens=self.config["env_config"]["env_params"]["perturbe_every_n_gens"],
+                                perturbe_every_n_gens=self.config["env_config"]["env_params"]["perturbe_every_n_gens"],
                                 strategy=self.config["optimizer_config"]["optimizer_params"]["strategy"],
                                 params_shaper=self.params_shaper,
                                 popsize=self.config["optimizer_config"]["optimizer_params"]["popsize"],
                                 fitness_shaper=fitness_shaper,
                                 num_tasks = self.env.num_tasks,
                                 reward_for_solved=self.env.reward_for_solved,
-                                #noise_range=self.config["env_config"]["env_params"]["noise_range"],
+                                noise_range=self.config["env_config"]["env_params"]["noise_range"],
                                 # sigma_init = 0.01,
                                 es_kws=es_kws,
                                 logger=logger,

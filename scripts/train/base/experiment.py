@@ -112,8 +112,8 @@ class Experiment:
         else:
             env_part = self.config["env_config"]["env_name"].replace("/", "_")
         wandb.init(
-            project="freq_anal_" + self.config["env_config"]["env_type"] + "_" + env_part  ,
-            name=self.opt_alias + "_trial_" + str(trial),
+            project="rebuttal_" + self.config["env_config"]["env_type"] + "_" + env_part  ,
+            name=self.opt_alias + "_trial_" + str(trial) + "_noise_" + str(self.config["env_config"]["env_params"]["noise_range"]) + "_perturbe_" + str(self.config["env_config"]["env_params"]["perturbe_every_n_gens"]),
             tags =  "/trial_" + str(trial),
             config=self.config,
             reinit=True

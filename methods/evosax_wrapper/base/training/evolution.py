@@ -191,7 +191,17 @@ class EvosaxTrainer(BaseTrainer):
 
 		fitness, eval_data, interm_policies, temp_task_paramsm, env_state = self.eval(x, eval_key, task_params, current_gen, env_state, noise)
   
-		
+		features = eval_data["features"]
+		descriptors = jnp.swapaxes(features, 0, 1)  # (n_trials, pop_size, descriptor_dim)
+
+		def mean_pairwise_for_trial(trial_descriptors):
+			diffs = trial_descriptors[:, None, :] - trial_descriptors[None, :, :]     # same logic
+			pairwise_dists = jnp.linalg.norm(diffs, axis=-1)
+			iu0, iu1 = jnp.triu_indices(pairwise_dists.shape[0], k=1)
+			return jnp.mean(pairwise_dists[iu0, iu1])
+
+		mean_pairwise_per_trial = jax.vmap(mean_pairwise_for_trial)(descriptors)
+		avg_distance = jnp.mean(mean_pairwise_per_trial)  # final scalar
 
 		def change_task(env_params):
 			new_task = jnp.minimum(env_params + 1, self.num_tasks ).astype(jnp.int32)
@@ -213,7 +223,7 @@ class EvosaxTrainer(BaseTrainer):
 
 
 
-		return state, {"fitness": fitness, "best_indiv": jnp.argmax(fitness), "data": eval_data, "interm_policies": interm_policies, "parameters": x, "fitness_all": f}, new_task_params, env_state
+		return state, {"fitness": fitness, "behaviroral_diversity": avg_distance, "best_indiv": jnp.argmax(fitness), "data": eval_data, "interm_policies": interm_policies, "parameters": x, "fitness_all": f}, new_task_params, env_state
 
 	#-------------------------------------------------------------------
 

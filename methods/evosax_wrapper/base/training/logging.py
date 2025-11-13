@@ -40,7 +40,7 @@ class Logger:
 
 
 	def log(self, state: TrainState, data: Data, task_params: jnp.array, noise, diversity, current_gravity, 
-			flat_mean=None, flat_min=None, flat_max=None, flat_var=None,
+			flat_mean=None, behaviroral_diversity=None, flat_min=None, flat_max=None, flat_var=None,
 			mean_individual_mean=None, mean_individual_min=None, mean_individual_max=None, mean_individual_var=None,
 			var_individual_mean=None, var_individual_min=None, var_individual_max=None, var_individual_var=None,
 			mean_skewness=None, mean_kurtosis=None, mean_uniformity_ratio=None,
@@ -83,6 +83,7 @@ class Logger:
 			lambda data: self.metrics_fn(
 				state,
 				data,
+    behaviroral_diversity,
 				data["data"]["episode_length"],
 				task_params,
 				num_nodes,
