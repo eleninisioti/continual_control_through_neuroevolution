@@ -378,6 +378,122 @@ def train_kinetix_lifelong(num_trials, optimizer):
 def train_brax_all(num_trials, optimizer):
     train_brax(num_trials=num_trials, env_name="ant",population_size=512, optimizer=optimizer)
     train_brax(num_trials=num_trials, env_name="halfcheetah",population_size=512, optimizer=optimizer)
+    
+    
+def train_kinetix(num_trials, env_name,  optimizer_name):
+
+    # configure experiment
+    exp_config = {"seed": 0,
+                  "num_trials": num_trials}
+    
+    
+    ga_kws = {"sigma_init": 0.001, "elite_ratio":0.5}
+    es_kws = {
+              "sigma_init": 0.1, "elite_ratio": 0.5} # chanfws dfrom 1
+    #optimizer_name = "CMA_ES"
+    popsize = 1024
+    if optimizer_name == "CMA_ES":
+        opt_kws = es_kws
+        
+    elif optimizer_name == "OpenES":
+        opt_kws = {"sigma_init": 0.3}
+        opt_kws =   {     "sigma_init": 0.05, "sigma_decay": 0.999, "sigma_limit": 0.01,      "lrate_init": 0.01,
+        "lrate_decay": 0.999,
+        "lrate_limit": 0.001
+    }
+        #opt_kws =   {     "sigma_init": 0.03, "sigma_decay": 0.999, "sigma_limit": 0.01,      "lrate_init": 0.005,
+        #"lrate_decay": 0.999,
+        #"lrate_limit": 0.0005
+    #}1024
+    else:
+        opt_kws = ga_kws
+        popsize= 1024
+        
+    #popsize= 2
+
+    
+    # configure environment
+    env_params = default_env_params["kinetix"]
+    env_params["episode_type"] = "full"
+    env_params["curriculum"] = False
+    env_config = {"env_type": "kinetix",
+                  "env_name": env_name,
+                  "curriculum": False,
+                  "env_params": {}}
+    
+    
+    # configure method
+    num_timesteps = train_gens["kinetix"]
+    optimizer_config = {"optimizer_name": optimizer_name,
+                        "optimizer_type": "evosax",
+                        "optimizer_params": {"generations": num_timesteps,
+                                             "strategy": optimizer_name,
+                                             "popsize": popsize,
+                                             "es_kws": opt_kws}}
+    
+    
+    model_config = {"network_type": "kinetix",
+                    "model_params": hyperparams["kinetix"]}
+
+
+    exp = Experiment(env_config=env_config,
+                     optimizer_config=optimizer_config,
+                     model_config = model_config,
+                     exp_config=exp_config)
+    exp.run()
+
+def train_kinetix_all(num_trials, optimizer_name):
+    # Run all kinetix environments from h0 to h19
+    mode = "medium"
+    if mode == "easy":
+        env_names = [
+            # Small (s) environments - easier tasks
+            "s/h0_weak_thrust",
+            "s/h1_thrust_over_ball", 
+            "s/h2_one_wheel_car",
+            "s/h3_point_the_thruster",
+            "s/h4_thrust_aim",
+            "s/h5_rotate_fall",
+            "s/h6_unicycle_right",
+            "s/h7_unicycle_left",
+            "s/h8_unicycle_balance",
+            "s/h9_explode_then_thrust_over",
+            
+        ]
+    elif mode == "medium":
+        env_names = [
+            # Medium (m) environments - more challenging tasks
+            "m/h0_unicycle",
+            "m/h1_car_left",
+            "m/h2_car_right", 
+            "m/h3_car_thrust",
+            "m/h4_thrust_the_needle",
+            "m/h5_angry_birds",
+            "m/h6_thrust_over",
+            "m/h7_car_flip",
+            "m/h8_weird_vehicle",
+            "m/h9_spin_the_right_way",
+            "m/h10_thrust_right_easy",
+            "m/h11_thrust_left_easy",
+            "m/h12_thrustfall_left",
+            "m/h13_thrustfall_right",
+            "m/h14_thrustblock",
+            "m/h15_thrustshoot",
+            "m/h16_thrustcontrol_right",
+            "m/h17_thrustcontrol_left",
+            "m/h18_thrust_right_very_easy",
+            "m/h19_thrust_left_very_easy",
+        ]
+    
+    #env_names = ["l/h13_platformer_2.json"]
+
+        
+    
+    for env_name in env_names:
+        print(f"Training on environment: {env_name}")
+        train_kinetix(num_trials=num_trials, env_name=env_name, optimizer_name=optimizer_name)
+    
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="This script trains Proximal Policy Optimisation on the stepping gates and ecorobot benchmarks")
@@ -396,7 +512,7 @@ if __name__ == "__main__":
     #train_ecorobot_hyperparam_sweep(num_trials=args.num_trials, env_name="locomotion", robot_type="halfcheetah", population_size=512, optimizer=args.optimizer)
     
     
-    train_classic_control_parameteric(num_trials=args.num_trials, optimizer=args.optimizer)
+    #train_classic_control_parameteric(num_trials=args.num_trials, optimizer=args.optimizer)
     
     # will train for the lifelong variations of Acrobot, Cartpole, MountainCar 
     #train_classic_control_all(num_trials=args.num_trials, optimizer=args.optimizer)
@@ -408,3 +524,4 @@ if __name__ == "__main__":
 
     # will train Kineitx (medium difficuly tasks))
     #train_kinetix_lifelong(num_trials=args.num_trials, optimizer=args.optimizer)
+    train_kinetix_all(num_trials=args.num_trials, optimizer_name=args.optimizer)

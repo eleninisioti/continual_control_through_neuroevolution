@@ -302,15 +302,15 @@ class BaseTrainer(eqx.Module):
 
 		task_params_init = 0
 		#keys = jr.split(key, 10)
-		num_tasks = int(self.train_steps / self.perturbe_every_n_gens) + 50
-		total_noise = jax.random.normal(key, (num_tasks,self.obs_size))*self.noise_range
+		num_tasks = int(self.train_steps / self.continual_config["perturbe_every_n_gens"]) + 50
+		total_noise = jax.random.normal(key, (num_tasks,self.obs_size))*self.continual_config["noise_range"]
 
 		# Use scan with early termination support
 		
 		def _step_with_early_stop(carry, x):
 			state, key, task_params, should_stop, env_state = carry
 			generation = x
-			current_task = generation // self.perturbe_every_n_gens
+			current_task = generation // self.continual_config["perturbe_every_n_gens"]
 			#current_task = 0 
 			noise = total_noise[current_task, :]
 

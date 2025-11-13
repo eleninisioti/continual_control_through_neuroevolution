@@ -9,8 +9,8 @@ from typing import Mapping, NamedTuple, Tuple
 import equinox.nn as nn
 from flax import linen
 import pickle
-#from methods.Kinetix.kinetix.models import make_network_from_config
-#from methods.Kinetix.kinetix.models.actor_critic import ScannedRNN
+from methods.Kinetix.kinetix.models import make_network_from_config
+from methods.Kinetix.kinetix.models.actor_critic import ScannedRNN
 from typing import NamedTuple
 import numpy as np
 
@@ -18,7 +18,7 @@ class PolicyState(NamedTuple):
     weights: jax.Array
     adj: jax.Array
     rnn_state: Optional[jax.Array]
-    n_dormant: Optional[jax.Array] = None
+    n_dormant: Optional[jax.Array] = jnp.array([0.0])
 
 
 class MLP(eqx.Module):

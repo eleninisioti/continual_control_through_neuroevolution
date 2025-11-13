@@ -111,9 +111,14 @@ class Experiment:
                 env_part = self.config["env_config"]["env_name"].replace("/", "_") + "_" + self.config["env_config"]["env_params"]["robot_type"]
         else:
             env_part = self.config["env_config"]["env_name"].replace("/", "_")
+            
+        if self.config["env_config"]["env_type"] == "kinetix":
+            run_name = self.opt_alias + "_trial_" + str(trial) 
+        else:
+            run_name = self.opt_alias + "_trial_" + str(trial) + "_noise_" + str(self.config["env_config"]["env_params"]["noise_range"]) + "_perturbe_" + str(self.config["env_config"]["env_params"]["perturbe_every_n_gens"])
         wandb.init(
             project="rebuttal_" + self.config["env_config"]["env_type"] + "_" + env_part  ,
-            name=self.opt_alias + "_trial_" + str(trial) + "_noise_" + str(self.config["env_config"]["env_params"]["noise_range"]) + "_perturbe_" + str(self.config["env_config"]["env_params"]["perturbe_every_n_gens"]),
+            name=run_name  ,
             tags =  "/trial_" + str(trial),
             config=self.config,
             reinit=True

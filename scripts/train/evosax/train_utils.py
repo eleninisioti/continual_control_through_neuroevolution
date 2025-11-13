@@ -763,17 +763,23 @@ class EvosaxExperiment(Experiment):
         #init_min = es_kws.pop("init_min", None)
         
         
+        if self.config["env_config"]["env_type"] == "kinetix":
+            continual_config = {"perturbe_every_n_gens": 200, "noise_range": 1.0}
+        else:
+            continual_config = {"perturbe_every_n_gens": self.config["env_config"]["env_params"]["perturbe_every_n_gens"],
+                                "noise_range": self.config["env_config"]["env_params"]["noise_range"]}
+        
+        
         trainer = EvosaxTrainer(train_steps=self.config["optimizer_config"]["optimizer_params"]["generations"],
                                 task=self.env,
                                 save_params_fn=self.save_params,
-                                perturbe_every_n_gens=self.config["env_config"]["env_params"]["perturbe_every_n_gens"],
+                                continual_config= continual_config,
                                 strategy=self.config["optimizer_config"]["optimizer_params"]["strategy"],
                                 params_shaper=self.params_shaper,
                                 popsize=self.config["optimizer_config"]["optimizer_params"]["popsize"],
                                 fitness_shaper=fitness_shaper,
                                 num_tasks = self.env.num_tasks,
                                 reward_for_solved=self.env.reward_for_solved,
-                                noise_range=self.config["env_config"]["env_params"]["noise_range"],
                                 # sigma_init = 0.01,
                                 es_kws=es_kws,
                                 logger=logger,

@@ -47,8 +47,7 @@ class EvosaxTrainer(BaseTrainer):
 	num_tasks: int
 	pretrained_evosax_state: int
 	obs_size: int
-	noise_range: float
-	perturbe_every_n_gens: int
+	continual_config: dict
 	task_keep: Task
 	#-------------------------------------------------------------------
 
@@ -61,8 +60,8 @@ class EvosaxTrainer(BaseTrainer):
 
 
 			save_params_fn: int,
-   perturbe_every_n_gens: int=200,
-     noise_range: float=1,
+     continual_config={"perturbe_every_n_gens": 200, "noise_range": 0},
+
 			reward_for_solved: float=0,
 			init_evosax_state=None,
 
@@ -87,14 +86,13 @@ class EvosaxTrainer(BaseTrainer):
 		self.save_params_fn = save_params_fn
 		self.pretrained_evosax_state = init_evosax_state
 		self.obs_size = task.obs_size
-		self.perturbe_every_n_gens = perturbe_every_n_gens
+		self.continual_config = continual_config
 		if isinstance(strategy, str):
 			assert popsize is not None
 			self.strategy = self.create_strategy(strategy, popsize, params_shaper.total_params, **es_kws) # type: ignore
 		else:
 			self.strategy = strategy
 		self.wrap_for_monitoring = wrap_for_monitoring
-		self.noise_range = noise_range
 		#if wrap_for_monitoring:
 		#	self.strategy = MonitorWrapper(self.strategy)
 

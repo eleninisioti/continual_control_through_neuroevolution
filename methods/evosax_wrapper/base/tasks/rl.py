@@ -10,19 +10,19 @@ from brax import envs as brax_envs
 
 from jaxtyping import Float, PyTree
 import gymnax
-from craftax.craftax.envs.craftax_symbolic_env import CraftaxSymbolicEnvNoAutoReset
-"""
+#from craftax.craftax.envs.craftax_symbolic_env import CraftaxSymbolicEnvNoAutoReset
+
 from kinetix.environment.env import make_kinetix_env
 from kinetix.util import generate_params_from_config
 from kinetix.environment.ued.ued import make_reset_fn_from_config
 from kinetix.environment.utils import ActionType, ObservationType
 from kinetix.environment.env_state import EnvParams, StaticEnvParams
 from kinetix.util.config import normalise_config
-"""
+
 from ecorobot import envs as ecorobot_envs
 from flax.serialization import to_state_dict
 import yaml
-#from methods.Kinetix.kinetix.util.saving import load_from_json_file
+from methods.Kinetix.kinetix.util.saving import load_from_json_file
 
 Params: TypeAlias = PyTree
 TaskParams: TypeAlias = PyTree
@@ -606,7 +606,7 @@ class KinetixTask(eqx.Module):
         return jnp.sum(data["reward"]), data, policy_states, 0.0, None
 
  
-    def initialize(self, key: jax.Array, target_function=None) -> EnvState:
+    def initialize(self, key: jax.Array, target_function=None, current_task=0) -> EnvState:
         obs, state = self.env.reset(key)
         return obs, state
 
@@ -653,8 +653,28 @@ class KinetixTask(eqx.Module):
         indexes = jnp.arange(states.env_state.reward.shape[0])
         data["reward"] = jnp.where(indexes > first_done, 0, states.env_state.reward)
         data["episode_length"] = first_done
+        
+        
+        def flatten_env_state_without_time(env_state):
+            leaves, _ = jax.tree_util.tree_flatten_with_path(env_state)
+            chunks = []
+            for path, leaf in leaves:
+                # last entry in the path corresponds to the field/key name
+                if isinstance(path[-1], jax.tree_util.GetAttrKey) and path[-1].name == "time":
+                    continue
+                if isinstance(path[-1], jax.tree_util.DictKey) and path[-1].key == "time":
+                    continue
+                chunks.append(leaf.reshape(leaf.shape[0], -1))
+            return jnp.concatenate(chunks, axis=1)
+        
+        
+        env_state = states.env_state.env_state  
+        features = flatten_env_state_without_time(env_state)
+        data["features"] = features.reshape(-1)
+        data["actions"]  = actions
   
         data["actions"]  = actions
+        data["n_dormant"] = 0 # we do not measure this for kinetix
         return state, states, data, policy_states
 
 
