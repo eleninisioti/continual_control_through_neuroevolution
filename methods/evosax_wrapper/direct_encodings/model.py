@@ -62,7 +62,7 @@ class MLP(eqx.Module):
         
         # Create hidden layer sizes list
         hidden_sizes = [num_hidden] * num_layers
-        
+        """
         self.mlp = MLPWithDormantTracking(
             input_size=obs_dims,
             output_size=action_dims,
@@ -71,6 +71,16 @@ class MLP(eqx.Module):
             final_activation=final_activation,
             key=key
         )
+        """
+        self.mlp = nn.MLP(obs_dims,
+                    action_dims,
+                #16, 2,
+                num_hidden, num_layers,
+                    #activation=linen.relu, final_activation=linen.tanh,
+                    final_activation=final_activation, activation=activation,
+                                            #activation=linen.relu, final_activation=lambda x: x,
+
+                key=key, use_bias=True, use_final_bias=True)
 
 
 
@@ -122,7 +132,9 @@ class MLP(eqx.Module):
     def __call__(self, obs: jax.Array, state: PolicyState, key: jax.Array, obs_size=None, action_size=None) -> Tuple[jax.Array, PolicyState]:
         #jax.debug.print("obs: {}",obs)
         
-        a, dormant_ratio = self.mlp(obs)
+        #a, dormant_ratio = self.mlp(obs)
+        a = self.mlp(obs)
+        dormant_ratio=jnp.array([0.0])
         #jax.debug.print("inside model: {}", a)
         
         # Update state with dormant neuron information

@@ -87,7 +87,7 @@ def train(
     save_params_fn,
     gymnax_env_params, # this is needed for gymnax
     env_params,
-    perturbe_every_n_gens: int=None,
+    perturbe_every_n_gens: int=200,
     noise_range: float=0.0,
     skip_connections_prob: float=0.0,
     num_neurons: int=16, # number of neurons used in each layer of the policy network. value network will be this times 8
@@ -270,7 +270,7 @@ def train(
 
   init_env_params = jnp.zeros((1,)).astype(jnp.int32)
   
-  init_noise = 0.0
+  init_noise = [0.0]
   if isinstance(environment, envs.Env):
     reset_fn = jax.jit(jax.vmap(env.reset, in_axes=(0)))
 

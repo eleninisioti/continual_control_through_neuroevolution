@@ -6,6 +6,7 @@ import jax.random as jr
 import equinox as eqx
 # from stepping_gates import envs as gate_envs
 #from simple import envs as simple_envs
+from brax import envs as brax_envs
 
 from jaxtyping import Float, PyTree
 import gymnax
@@ -18,6 +19,7 @@ from kinetix.environment.utils import ActionType, ObservationType
 from kinetix.environment.env_state import EnvParams, StaticEnvParams
 from kinetix.util.config import normalise_config
 """
+from ecorobot import envs as ecorobot_envs
 from flax.serialization import to_state_dict
 import yaml
 #from methods.Kinetix.kinetix.util.saving import load_from_json_file
@@ -700,7 +702,7 @@ class EcorobotTask(eqx.Module):
         return jnp.sum(data["reward"]), data, policy_states, 0.0, None
 
  
-    def initialize(self, key: jax.Array, target_function=None) -> EnvState:
+    def initialize(self, key: jax.Array, target_function=None, current_task=0) -> EnvState:
         state = self.env.reset(key)
         return state.obs, state
 
@@ -738,9 +740,11 @@ class EcorobotTask(eqx.Module):
         first_done = jnp.where(any_done, first_done, states.env_state.done.shape[0])
         indexes = jnp.arange(states.env_state.reward.shape[0])
         data["reward"] = jnp.where(indexes > first_done, 0, states.env_state.reward)
-        data["reward"] = states.env_state.reward
+        #data["reward"] = states.env_state.reward
         data["episode_length"] = first_done
         data["actions"]  = actions
+        data["n_dormant"] = jnp.mean(states.policy_state.n_dormant[:,0])
+
         return state, states, data, policy_states
 
 class BraxTask(eqx.Module):
@@ -755,6 +759,10 @@ class BraxTask(eqx.Module):
     num_tasks: int
     current_task: int
     reward_for_solved: float
+    obs_size: int
+    action_size: int
+    env_name: str
+    env_params: dict
 
     data_fn: Callable[[PyTree], dict]
     #-------------------------------------------------------------------
@@ -764,7 +772,7 @@ class BraxTask(eqx.Module):
         statics: PyTree[...],
         env: Union[str, PyTree],
         max_steps: int,
-        backend: str="positional",
+        backend: str="mjx",
         data_fn: Callable=lambda x: x, 
         env_kwargs: dict={}):
         
@@ -780,6 +788,10 @@ class BraxTask(eqx.Module):
         #self.num_tasks = self.env.num_tasks
         self.reward_for_solved = 5000
         self.current_task = 0
+        self.obs_size = self.env.observation_size
+        self.action_size = self.env.action_size
+        self.env_name = env
+        self.env_params = env_kwargs
 
     #-------------------------------------------------------------------
 
@@ -788,27 +800,32 @@ class BraxTask(eqx.Module):
         params: Params, 
         key: jax.Array, 
         task_params: Optional[TaskParams]=None,
-            current_gen: int=0)->Tuple[Float, PyTree]:
+        current_gen: int=0,
+        env_state: Optional[EnvState]=None,
+        noise: Optional[jax.Array]=None)->Tuple[Float, PyTree]:
 
-        _, _, data, policy_states= self.rollout(params, key)
-        return jnp.sum(data["reward"]), data, policy_states, 0.0
+        _, _, data, policy_states = self.rollout(params, key)
+        return jnp.sum(data["reward"]), data, policy_states, 0.0, None
 
     #-------------------------------------------------------------------
 
+    
     def rollout(
         self, 
         params: Params, 
         key: jax.Array, 
         task_params: Optional[TaskParams]=None)->Tuple[State, State, dict]:
-        
+
         init_env_key, init_policy_key, rollout_key = jr.split(key, 3)
         policy = eqx.combine(params, self.statics)
-        
+
         policy_state, policy_states = policy.initialize(init_policy_key)
-        env_state = self.initialize(init_env_key)
+        obs, env_state = self.initialize(init_env_key)
         init_state = State(env_state=env_state, policy_state=policy_state)
+
         obs_size = self.env.observation_size
         action_size = self.env.action_size
+
         def env_step(carry, x):
             state, key = carry
             key, _key = jr.split(key)
@@ -818,16 +835,20 @@ class BraxTask(eqx.Module):
             
             return [new_state, key], (state, action)
 
-        [state, _], (states, actions) = jax.lax.scan(env_step, [init_state, rollout_key], None, self.max_steps)
+        [state, _], (states, actions) = jax.lax.scan(env_step, [init_state, rollout_key], None, self.max_steps)    
         data = {"policy_states": states.policy_state, "obs": states.env_state.obs}
         data = self.data_fn(data)
         first_done = jnp.argmax(states.env_state.done)
+		# If no episode is done, first_done will be 0, but we want to check if any are actually done
+        any_done = jnp.any(states.env_state.done)
+        first_done = jnp.where(any_done, first_done, states.env_state.done.shape[0])
         indexes = jnp.arange(states.env_state.reward.shape[0])
         data["reward"] = jnp.where(indexes > first_done, 0, states.env_state.reward)
+        #data["reward"] = states.env_state.reward
+        data["episode_length"] = first_done
         data["actions"]  = actions
-        data["reward"] = states.env_state.reward
-        #data["reward"] = states.env_state.reward*(1-states.env_state.done) # do not take into account rewards from steps where the episode is done
-        #data["actions"] = actions
+        data["n_dormant"] = jnp.mean(states.policy_state.n_dormant[:,0])
+
         return state, states, data, policy_states
 
     #-------------------------------------------------------------------
@@ -840,9 +861,9 @@ class BraxTask(eqx.Module):
 
     #-------------------------------------------------------------------
 
-    def initialize(self, key:jax.Array)->EnvState:
-        
-        return self.env.reset(key)
+    def initialize(self, key:jax.Array, current_task: int=0)->EnvState:
+        state = self.env.reset(key)
+        return state.obs, state
 
 
 

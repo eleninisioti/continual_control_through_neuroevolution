@@ -33,9 +33,9 @@ class EvoParams:
     c_c: float
     chi_n: float
     c_m: float = 1.0
-    sigma_init: float = 0.065
-    init_min: float = -0.0
-    init_max: float = 0.0
+    sigma_init: float = 0.1
+    init_min: float = -0.1
+    init_max: float = 0.1
     clip_min: float = -jnp.finfo(jnp.float32).max
     clip_max: float = jnp.finfo(jnp.float32).max
 

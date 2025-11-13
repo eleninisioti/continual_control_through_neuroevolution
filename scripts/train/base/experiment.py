@@ -39,7 +39,7 @@ class Experiment:
             f"{key}_{value}" for key, value in self.config["optimizer_config"]["optimizer_params"].items())
 
         project_dir = "projects/benchmarking/" + datetime.today().strftime(
-            '%Y_%m_%d') + "/" + self.env_alias + "/" + self.opt_alias + "/" + self.model_alias + "_cont_" + str(self.config["env_config"]["continual"]) + "_test"
+            '%Y_%m_%d') + "/" + self.env_alias + "/" + self.opt_alias + "/" + self.model_alias + "_test"
 
         print("Saving project under " + project_dir)
 
@@ -113,7 +113,7 @@ class Experiment:
             env_part = self.config["env_config"]["env_name"].replace("/", "_")
         wandb.init(
             project="freq_anal_" + self.config["env_config"]["env_type"] + "_" + env_part  ,
-            name=self.opt_alias + "_noise_range_" + str(self.config["env_config"]["env_params"]["noise_range"]) + "_perturbe_every_n_gens_" + str(self.config["env_config"]["env_params"]["perturbe_every_n_gens"]) + "_trial_" + str(trial) + "_contcorrect_" + str(self.config["env_config"]["continual"]),
+            name=self.opt_alias + "_trial_" + str(trial),
             tags =  "/trial_" + str(trial),
             config=self.config,
             reinit=True

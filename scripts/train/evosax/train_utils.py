@@ -17,9 +17,11 @@ from methods.evosax_wrapper.direct_encodings.model import make_model
 from methods.evosax_wrapper.base.training.evolution import EvosaxTrainer
 from methods.evosax_wrapper.base.training.logging  import Logger
 import equinox as eqx
+from brax import envs as brax_envs
+
 import evosax
 from methods.evosax_wrapper.base.tasks.rl import GatesTask
-from methods.evosax_wrapper.base.tasks.rl import GymnaxTask, GymnaxTaskWithPerturbation, MinatarMultiTask, CraftaxTask, KinetixTask
+from methods.evosax_wrapper.base.tasks.rl import GymnaxTask, GymnaxTaskWithPerturbation, MinatarMultiTask, CraftaxTask, KinetixTask, BraxTask
 from craftax.craftax.envs.craftax_symbolic_env import CraftaxSymbolicEnvNoAutoReset
 from methods.evosax_wrapper.base.tasks.rl import CraftaxState
 import wandb
@@ -31,6 +33,8 @@ from kinetix.environment.utils import ActionType, ObservationType
 from kinetix.environment.env_state import EnvParams, StaticEnvParams
 from kinetix.util.config import normalise_config
 from flax.serialization import to_state_dict
+from ecorobot import envs as ecorobot_envs
+
 
 def _unpmap(v):
   return jax.tree_util.tree_map(lambda x: x[0], v)
@@ -78,8 +82,21 @@ class EvosaxExperiment(Experiment):
         
         self.config["env_config"]["action_size"] = self.env.action_size
         self.config["env_config"]["observation_size"] = self.env.observation_size
-        self.config["env_config"]["episode_length"] = self.env.episode_length
+        self.config["env_config"]["episode_length"] = 1000
         self.config["env_config"]["num_tasks"] = self.env.num_tasks
+        self.config["env_config"]["gymnax_env_params"] = None
+        self.config["env_config"]["kinetix_config"] = None
+        self.for_eval = None
+        
+        
+    def setup_brax_env(self):
+        self.env = brax_envs.get_environment(env_name=self.config["env_config"]["env_name"],backend="mjx",
+                                                      **self.config["env_config"]["env_params"])
+        
+        self.config["env_config"]["action_size"] = self.env.action_size
+        self.config["env_config"]["observation_size"] = self.env.observation_size
+        self.config["env_config"]["episode_length"] = 100
+        self.config["env_config"]["num_tasks"] = 1
         self.config["env_config"]["gymnax_env_params"] = None
         self.config["env_config"]["kinetix_config"] = None
         self.for_eval = None
@@ -305,7 +322,7 @@ class EvosaxExperiment(Experiment):
                 #"robustness": log_info.robustness,
                 "num_nodes": num_nodes,
                 "num_edges": 0,
-                "noise": onp.array(noise[0]),
+                "noise": onp.array(noise[0]) if len(onp.array(noise).shape) > 0 else onp.array(noise),
                 "mean_n_dormant": onp.mean(onp.array(n_dormant)),
                 "max_n_dormant": onp.max(onp.array(n_dormant)),
                 "min_n_dormant": onp.min(onp.array(n_dormant)),
@@ -691,6 +708,13 @@ class EvosaxExperiment(Experiment):
                                 max_steps=500,
                                 data_fn=data_fn,
                                 env_kwargs={**self.config["env_config"]["env_params"]})
+            
+        elif self.config["env_config"]["env_type"] == "brax":
+                self.env = BraxTask(statics=self.statics,
+                                    env=self.config["env_config"]["env_name"],
+                                    max_steps=1000,
+                                    data_fn=data_fn,
+                                    env_kwargs={**self.config["env_config"]["env_params"]})
         elif self.config["env_config"]["env_type"] == "gymnax":
             self.env = GymnaxTaskWithPerturbation(statics=self.statics,
                                 env=self.config["env_config"]["env_name"],
@@ -733,25 +757,29 @@ class EvosaxExperiment(Experiment):
 
 
 
+        # Extract init_min and init_max from es_kws if present (they need to be applied to es_params, not es_kws)
+        es_kws = {**self.config["optimizer_config"]["optimizer_params"]["es_kws"]}
+        #init_min = es_kws.pop("init_min", None)
+        
+        
         trainer = EvosaxTrainer(train_steps=self.config["optimizer_config"]["optimizer_params"]["generations"],
                                 task=self.env,
                                 save_params_fn=self.save_params,
-                                perturbe_every_n_gens=self.config["env_config"]["env_params"]["perturbe_every_n_gens"],
+                                #perturbe_every_n_gens=self.config["env_config"]["env_params"]["perturbe_every_n_gens"],
                                 strategy=self.config["optimizer_config"]["optimizer_params"]["strategy"],
                                 params_shaper=self.params_shaper,
                                 popsize=self.config["optimizer_config"]["optimizer_params"]["popsize"],
                                 fitness_shaper=fitness_shaper,
                                 num_tasks = self.env.num_tasks,
                                 reward_for_solved=self.env.reward_for_solved,
-                                noise_range=self.config["env_config"]["env_params"]["noise_range"],
+                                #noise_range=self.config["env_config"]["env_params"]["noise_range"],
                                 # sigma_init = 0.01,
-                                es_kws={**self.config["optimizer_config"]["optimizer_params"]["es_kws"]
-                                        },
+                                es_kws=es_kws,
                                 logger=logger,
                                 progress_bar=False,
                                 n_devices=1,
                                 eval_reps=2)
-        
+
         popsize = self.config["optimizer_config"]["optimizer_params"]["popsize"]
         initial_info = {
 			'Achievements/wake_up': 0.0,

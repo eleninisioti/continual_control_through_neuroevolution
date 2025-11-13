@@ -15,7 +15,7 @@ from scripts.train.rl.ppo.hyperparams import hyperparams
 from scripts.train.base.utils import max_rewards
 #from stepping_gates import envs as stepping_gates_envs
 from brax import envs as brax_envs
-#from ecorobot import envs as ecorobot_envs
+from ecorobot import envs as ecorobot_envs
 #from envs.stepping_gates.stepping_gates.envs.wrappers import wrap as dgates_wrap
 import wandb
 import gymnax
@@ -70,6 +70,8 @@ class PPOExperiment(Experiment):
                                                       backend="mjx")
         self.env.reward_for_solved = max_rewards[self.config["env_config"]["env_name"]]
         self.env.num_tasks = 1
+        self.config["env_config"]["gymnax_env_params"] = None
+
         self.config["env_config"]["action_size"] = self.env.action_size
         self.config["env_config"]["observation_size"] = self.env.observation_size
         self.config["env_config"]["episode_length"] = 1000
@@ -183,8 +185,8 @@ class PPOExperiment(Experiment):
         make_inference_fn, params, _, training_state = self.model(environment=self.env,
                                                                   progress_fn=self.progress,
                                                                   save_params_fn=self.save_params,
-                                                                  noise_range=self.config["env_config"]["env_params"]["noise_range"],
-                                                                  perturbe_every_n_gens=self.config["env_config"]["env_params"]["perturbe_every_n_gens"],
+                                                                  #noise_range=self.config["env_config"]["env_params"]["noise_range"],
+                                                                  #perturbe_every_n_gens=self.config["env_config"]["env_params"]["perturbe_every_n_gens"],
                                                                   gymnax_env_params=self.config["env_config"]["gymnax_env_params"],
                                                                                                               env_params=self.config["env_config"]["env_params"])
 

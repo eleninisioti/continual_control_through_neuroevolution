@@ -24,8 +24,8 @@ class EvoParams:
     sigma_init: float = 0.07
     sigma_decay: float = 1.0
     sigma_limit: float = 0.0001
-    init_min: float = -1
-    init_max: float = 1.0
+    init_min: float = -1.0
+    init_max: float = 1
     clip_min: float = -jnp.finfo(jnp.float32).max
     clip_max: float = jnp.finfo(jnp.float32).max
 
@@ -40,6 +40,8 @@ class SimpleGA(Strategy):
         sigma_init: float = 0.1,
         sigma_decay: float = 1.0,
         sigma_limit: float = 0.01,
+        init_min: float = -1.0,
+        cross_over_rate: float = 0.0,
         n_devices: Optional[int] = None,
         **fitness_kwargs: Union[bool, int, float]
     ):
@@ -62,6 +64,9 @@ class SimpleGA(Strategy):
         self.sigma_init = sigma_init
         self.sigma_decay = sigma_decay
         self.sigma_limit = sigma_limit
+        self.init_min = init_min
+        self.init_max = -init_min
+        self.cross_over_rate = cross_over_rate
 
     @property
     def params_strategy(self) -> EvoParams:
@@ -70,6 +75,7 @@ class SimpleGA(Strategy):
             sigma_init=self.sigma_init,
             sigma_decay=self.sigma_decay,
             sigma_limit=self.sigma_limit,
+            init_min=self.init_min,
         )
 
     def initialize_strategy(
@@ -81,8 +87,8 @@ class SimpleGA(Strategy):
             initialization = jax.random.uniform(
                 rng,
                 (self.elite_popsize, self.num_dims),
-                minval=params.init_min,
-                maxval=params.init_max,
+                minval=self.init_min,
+                maxval=self.init_max,
             )
             """
             target_variance = 400.0
@@ -131,7 +137,7 @@ class SimpleGA(Strategy):
         members_a = state.archive[idx_a]
         members_b = state.archive[idx_b]
         x = jax.vmap(single_mate, in_axes=(0, 0, 0, None))(
-            rng_mate, members_a, members_b, params.cross_over_rate
+            rng_mate, members_a, members_b, self.cross_over_rate
         )
         #epsilon = jnp.zeros_like(epsilon)
         x += epsilon

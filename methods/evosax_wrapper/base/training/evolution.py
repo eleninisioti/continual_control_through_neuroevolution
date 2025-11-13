@@ -58,10 +58,11 @@ class EvosaxTrainer(BaseTrainer):
 		strategy: Union[ex.Strategy, str],
 		task: Callable,
 		params_shaper: ex.ParameterReshaper,
-  noise_range: float,
+
 
 			save_params_fn: int,
-   perturbe_every_n_gens: int,
+   perturbe_every_n_gens: int=200,
+     noise_range: float=1,
 			reward_for_solved: float=0,
 			init_evosax_state=None,
 
