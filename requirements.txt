@@ -51,16 +51,19 @@ importlib-resources==6.5.2
 ipython==9.5.0
 ipython-pygments-lexers==1.1.1
 itsdangerous==2.2.0
+jax==0.4.26
 jax-cuda12-pjrt==0.4.26
 jax-cuda12-plugin==0.4.26
 jax2d==1.0.1
 jaxgl==1.0.1
+jaxlib==0.4.26
 jaxopt==0.8.5
 jaxtyping==0.3.2
 jaxued==0.0.1
 jedi==0.19.2
 jinja2==3.1.6
 joblib==1.5.2
+-e file:///home/eleni/workspace/continual_control_through_neuroevolution/methods/Kinetix
 kiwisolver==1.4.9
 markdown-it-py==4.0.0
 markupsafe==3.0.2
@@ -78,7 +81,7 @@ mypy-extensions==1.1.0
 nest-asyncio==1.6.0
 networkx==3.5
 nodeenv==1.9.1
-numpy==2.3.3
+numpy==1.26.4
 nvidia-cublas-cu12==12.9.1.4
 nvidia-cuda-cupti-cu12==12.9.79
 nvidia-cuda-nvcc-cu12==12.9.86
