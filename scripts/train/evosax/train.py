@@ -2,15 +2,16 @@
 import sys
 import os
 sys.path.append(".")
+os.environ["CUDA_ISIBLE_DEVICES"] = "4"
 sys.path.append("methods/evosax_wrapper/") # to be able to import evosax
 import envs
 
 from scripts.train.evosax.train_utils import EvosaxExperiment as Experiment
-import os
 from scripts.train.base.utils import default_env_params
 from scripts.train.evosax.hyperparams import train_gens, hyperparams
 import argparse
 import wandb
+
 
 
 def train_ecorobot(num_trials, env_name, robot_type, population_size, optimizer):
@@ -361,19 +362,12 @@ def train_classic_control_parameteric(num_trials, optimizer):
         train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
         train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=1.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
         
+    train_gymnax(num_trials=num_trials, env_name="CartPole-v1",  population_size=512, noise_range=0.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+    train_gymnax(num_trials=num_trials, env_name="Acrobot-v1", population_size=512, noise_range=0.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+    train_gymnax(num_trials=num_trials, env_name="MountainCar-v0",  population_size=512, noise_range=0.0, optimizer=optimizer, perturbe_every_n_gens=perturbe_every_n_gens)
+        
          
 
-def train_kinetix_lifelong(num_trials, optimizer):
-    
-    # we start from the first task and then the script will go through the rest
-    env_names = [
-        "m/h0_unicycle",
-    ]
-
-    env_name = env_names[0]  # Use the first environment
-    print(f"Starting with environment: {env_name}")
-    # train_kinetix(num_trials=num_trials, env_name=env_name, optimizer=optimizer)  # Commented out since function doesn't exist
-    
 
 def train_brax_all(num_trials, optimizer):
     train_brax(num_trials=num_trials, env_name="ant",population_size=512, optimizer=optimizer)
@@ -441,6 +435,20 @@ def train_kinetix(num_trials, env_name,  optimizer_name):
                      model_config = model_config,
                      exp_config=exp_config)
     exp.run()
+    
+    
+
+def train_kinetix_lifelong(num_trials, optimizer):
+    
+    # we start from the first task and then the script will go through the rest
+    env_names = [
+        "m/h0_unicycle",
+    ]
+
+    env_name = env_names[0]  # Use the first environment
+    print(f"Starting with environment: {env_name}")
+    train_kinetix(num_trials=num_trials, env_name=env_name, optimizer_name=optimizer)  # Commented out since function doesn't exist
+    
 
 def train_kinetix_all(num_trials, optimizer_name):
     # Run all kinetix environments from h0 to h19
@@ -486,7 +494,7 @@ def train_kinetix_all(num_trials, optimizer_name):
         ]
     
     #env_names = ["l/h13_platformer_2.json"]
-
+    # env_names = ["l/lever_puzzle"]
         
     
     for env_name in env_names:
@@ -497,9 +505,11 @@ def train_kinetix_all(num_trials, optimizer_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="This script trains Proximal Policy Optimisation on the stepping gates and ecorobot benchmarks")
-    parser.add_argument("--num_trials", type=int, help="Number of trials", default=5)
+    parser.add_argument("--num_trials", type=int, help="Number of trials", default=1)
     parser.add_argument("--optimizer", type=str, help="Choose between SimpleGA and OpenES", default="SimpleGA")
+    parser.add_argument("--gpu", type=int, help="GPU device ID to use (e.g., 5 for GPU 5)", default=4)
     args = parser.parse_args()
+
     
     #train_brax(num_trials=args.num_trials, env_name="ant",population_size=512, optimizer=args.optimizer)
     #train_brax(num_trials=args.num_trials, env_name="ant",population_size=1024, optimizer="OpenES")
@@ -523,5 +533,5 @@ if __name__ == "__main__":
     #train_minatar(num_trials=args.num_trials, optimizer=args.optimizer)
 
     # will train Kineitx (medium difficuly tasks))
-    #train_kinetix_lifelong(num_trials=args.num_trials, optimizer=args.optimizer)
-    train_kinetix_all(num_trials=args.num_trials, optimizer_name=args.optimizer)
+    train_kinetix_lifelong(num_trials=args.num_trials, optimizer=args.optimizer)
+    #train_kinetix_all(num_trials=args.num_trials, optimizer_name=args.optimizer)

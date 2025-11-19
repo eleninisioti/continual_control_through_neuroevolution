@@ -39,7 +39,7 @@ class Experiment:
             f"{key}_{value}" for key, value in self.config["optimizer_config"]["optimizer_params"].items())
 
         project_dir = "projects/benchmarking/" + datetime.today().strftime(
-            '%Y_%m_%d') + "/" + self.env_alias + "/" + self.opt_alias + "/" + self.model_alias + "_test"
+            '%Y_%m_%d') + "/" + self.env_alias + "/" + self.opt_alias + "/" + self.model_alias + "_pixeltrue"
 
         print("Saving project under " + project_dir)
 
@@ -117,7 +117,7 @@ class Experiment:
         else:
             run_name = self.opt_alias + "_trial_" + str(trial) + "_noise_" + str(self.config["env_config"]["env_params"]["noise_range"]) + "_perturbe_" + str(self.config["env_config"]["env_params"]["perturbe_every_n_gens"])
         wandb.init(
-            project="rebuttal_" + self.config["env_config"]["env_type"] + "_" + env_part  ,
+            project="rebuttal_" + self.config["env_config"]["env_type"] + "_" + env_part + "_continual"+ "_pixels" ,
             name=run_name  ,
             tags =  "/trial_" + str(trial),
             config=self.config,
@@ -252,8 +252,8 @@ class Experiment:
         self.viz_eval(self.task.eval_info)
 
     def run_eval(self, act_fn, tasks, gens, final_policy=False, for_eval=None):
-        pass
+        
 
-        #self.task.run_eval(act_fn, self.config["exp_config"]["trial_dir"] + "/visuals/eval/trajs", tasks, gens, final_policy, for_eval)
+        self.task.run_eval(act_fn, self.config["exp_config"]["trial_dir"] + "/visuals/eval/trajs", tasks, gens, final_policy, for_eval)
 
     

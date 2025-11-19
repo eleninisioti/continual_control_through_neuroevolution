@@ -19,7 +19,7 @@ class Logger:
 		metrics_fn: Callable[[TrainState, Data], Tuple[Data, Data, int]],
 		ckpt_dir: Optional[str]=None,
 		aim_freq: int=1,
-		ckpt_freq: int=100,
+		ckpt_freq: int=199,
 		dev_steps: int=0,
 		verbose: bool=False):
 
@@ -51,8 +51,8 @@ class Logger:
 
 
 		#self.save_genes(genes, fitnesses, jnp.array(epoch))
-
-		#self.save_best_model(ckpt_data, jnp.array(epoch))
+		ckpt_data = state.mean
+		self.save_best_model(ckpt_data, jnp.array(state.gen_counter))
 
 		for dev_step in range(self.dev_steps+2):
 			current_dev =  jax.tree_map(lambda x: x[data["best_indiv"], 0, dev_step,...], data["interm_policies"])

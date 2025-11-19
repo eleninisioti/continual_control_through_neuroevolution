@@ -4,7 +4,7 @@ from scripts.train.base.utils import max_rewards
 import numpy as onp
 import numpy as np
 import jax.numpy as jnp
-#from kinetix.render import make_render_pixels
+from kinetix.render import make_render_pixels
 import matplotlib.pyplot as plt
 from PIL import Image
 import io
@@ -45,7 +45,7 @@ class Task:
             self.num_eval_trials = 1
             
         elif config["env_config"]["env_type"] == "kinetix":
-            self.num_eval_trials = 10
+            self.num_eval_trials = 100
             
         self.env_type = config["env_config"]["env_type"]
 
@@ -90,16 +90,17 @@ class Task:
     def run_eval_trial_kinetix(self, env, task, eval_trial, act_fn, obs_size, action_size, for_eval):
         trial_rewards = []
         trial_success = []
-        jit_env_reset = jax.jit(env.reset)
+        jit_env_reset = jax.jit(env.reset )
         jit_env_step = jax.jit(env.step)
         
+       
         renderer = make_render_pixels(for_eval["env_params"], for_eval["static_env_params"])
         
         # List to store frames for GIF creation
         frames = []
         
         rng = jax.random.PRNGKey(seed=eval_trial)
-        obs, state = jit_env_reset(rng, jax.numpy.array([task]))
+        obs, state = env.reset(rng, env_params=for_eval["env_params"], override_reset_state=for_eval["env_state"])
         cum_reward = 0
         infos = []
         actions = []
@@ -133,7 +134,7 @@ class Task:
             
 
 
-            obs, state, reward, done, _ = jit_env_step(act_rng, state, action, for_eval["env_params"])
+            obs, state, reward, done, _ = jit_env_step(act_rng, state, action, env_params=for_eval["env_params"])
             done = jnp.expand_dims(done, axis=0)
 
 
@@ -149,14 +150,14 @@ class Task:
         print(rewards)
         print(episode_length)
         
-        # Create GIF from collected frames
+        # Create GIF from collected frames  
         if frames:
             self.create_gif_from_frames(frames, task, eval_trial)
         
-        trial_success.append(float(success / episode_length))
-        trial_rewards.append(float(cum_reward))
+        trial_success = int(cum_reward > 1)
+        trial_rewards = float(cum_reward)
         
-        return trial_rewards, trial_success  
+        return trial_rewards, trial_success, episode_length
     
     def run_eval_trial_gymnax(self, env, task, eval_trial, act_fn, obs_size, action_size):
         trial_rewards = []
@@ -307,19 +308,26 @@ class Task:
                 obs_size, action_size = self.get_input_ouput(task)
                 
             
-
+            total_trial_rewards = []
+            total_trial_success = []
+            total_episode_lengths = []
             for eval_trial in range(self.num_eval_trials):
                 
-                trial_rewards, trial_success= self.run_eval_trial(env, task, eval_trial, act_fn, obs_size, action_size, for_eval)
+                trial_rewards, trial_success, episode_lengths= self.run_eval_trial(env, task, eval_trial, act_fn, obs_size, action_size, for_eval)
 
+                total_trial_rewards.append(trial_rewards)
+                total_trial_success.append(trial_success)
+                total_episode_lengths.append(episode_lengths)
 
             task_alias = "task_" + str(task)
             if final_policy:
                 task_alias += "_final_policy"
 
-                self.eval_info[task_alias] = {"rewards": [float(el) for el in trial_rewards],
-                                        "success": [float(el) for el in trial_success]}
+                self.eval_info[task_alias] = {"rewards": [float(el) for el in total_trial_rewards],
+                                        "success": [float(el) for el in total_trial_success],
+                                        "episode_lengths": [float(el) for el in total_episode_lengths]}
             else:
-                self.eval_info[task_alias] = {"rewards": [float(el) for el in trial_rewards],
-                                        "success": [float(el) for el in trial_success],
+                self.eval_info[task_alias] = {"rewards": [float(el) for el in total_trial_rewards],
+                                        "success": [float(el) for el in total_trial_success],
+                                        "episode_lengths": [float(el) for el in total_episode_lengths],
                                         "gens": gens}

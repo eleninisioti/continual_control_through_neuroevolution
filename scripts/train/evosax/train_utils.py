@@ -34,6 +34,7 @@ from kinetix.environment.env_state import EnvParams, StaticEnvParams
 from kinetix.util.config import normalise_config
 from flax.serialization import to_state_dict
 from ecorobot import envs as ecorobot_envs
+from methods.Kinetix.kinetix.util.saving import load_from_json_file
 
 
 def _unpmap(v):
@@ -105,19 +106,17 @@ class EvosaxExperiment(Experiment):
         
         
     def setup_kinetix_env(self):
-        with open("scripts/train/evosax/kinetix_config.yaml", "r") as f:
+        
+        with open("scripts/train/evosax/kinetix_config_pixels.yaml", "r") as f:
             config = yaml.load(f, Loader=yaml.SafeLoader)
-               
+            
         config = normalise_config(config, name="PPO")
-        self.config["env_config"]["kinetix_config"] = config
 
-        #observation_type = ObservationType.from_string(config["observation_type"])
-        #action_type = ActionType.from_string(config["action_type"])
-        env_params, static_env_params = generate_params_from_config(config)
+       
+        env_state, static_env_params, env_params= load_from_json_file(self.config["env_config"]["env_name"])
+        #self.env_params, static_env_params = generate_params_from_config(config)
         config["env_params"] = to_state_dict(env_params)
         config["static_env_params"] = to_state_dict(static_env_params)
-        
-        self.for_eval = {"env_params": env_params, "static_env_params": static_env_params}
 
         reset_fn = make_reset_fn_from_config(config, env_params, static_env_params)
         self.env = make_kinetix_env(
@@ -126,6 +125,17 @@ class EvosaxExperiment(Experiment):
                                                 reset_fn=reset_fn,
                                                 env_params=env_params,
                                                 static_env_params=static_env_params)
+        
+        
+     
+        self.config["env_config"]["kinetix_config"] = config
+
+        config["env_params"] = to_state_dict(env_params)
+        config["static_env_params"] = to_state_dict(static_env_params)
+        
+        self.for_eval = {"env_params": env_params, "static_env_params": static_env_params, "env_state": env_state}
+
+     
         #env_params["noise"] = 2.0
 
         #if self.config["env_config"]["env_params"]:
@@ -743,8 +753,10 @@ class EvosaxExperiment(Experiment):
                                 env_kwargs={**self.config["env_config"]["env_params"]})
             
         elif self.config["env_config"]["env_type"] == "kinetix":
+            # For multi-task, pass a list of env names (must match env_names in train_)
+            env_names = ["m/h0_unicycle", "l/lever_puzzle"]
             self.env = KinetixTask(statics=self.statics,
-                                env=self.config["env_config"]["env_name"],
+                                env=env_names,
                                 max_steps=256,
                                 data_fn=data_fn,
                                 env_kwargs={**self.config["env_config"]["env_params"]})
@@ -859,10 +871,10 @@ class EvosaxExperiment(Experiment):
 			'Achievements/place_plant': 0.0
 		}
         #obs, init_env_state = self.env.initialize(jax.random.PRNGKey(0), current_task=0)
-        obs, init_env_state = self.env.initialize(jax.random.PRNGKey(0), current_task=0)
+        #obs, init_env_state = self.env.initialize(jax.random.PRNGKey(0), current_task=0)
 
-        init_env_state = CraftaxState(env_state=init_env_state, obs=obs, reward=0.0, done=False, info=initial_info)
-        init_env_state = jax.tree_map(lambda x: jnp.repeat(jnp.expand_dims(x, axis=0), popsize, axis=0), init_env_state)
+        #init_env_state = CraftaxState(env_state=init_env_state, obs=obs, reward=0.0, done=False, info=initial_info)
+        #init_env_state = jax.tree_map(lambda x: jnp.repeat(jnp.expand_dims(x, axis=0), popsize, axis=0), init_env_state)
 
 
         #final_info = trainer.init_and_train_(self.train_key, init_env_state=init_env_state)
@@ -870,9 +882,9 @@ class EvosaxExperiment(Experiment):
         
         
         
-        total_noise_np = onp.array(total_noise)
-        onp.savetxt(self.config["exp_config"]["trial_dir"] + "/data/train/total_noise.csv", 
-                total_noise_np, delimiter=',', fmt='%.6f')
+        #total_noise_np = onp.array(total_noise)
+        #onp.savetxt(self.config["exp_config"]["trial_dir"] + "/data/train/total_noise.csv", 
+        #        total_noise_np, delimiter=',', fmt='%.6f')
         
         # Save archive history for PCA visualization
         # archive_history_np = onp.array(archive_history)

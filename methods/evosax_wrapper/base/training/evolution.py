@@ -105,11 +105,15 @@ class EvosaxTrainer(BaseTrainer):
 		self.params_shaper = params_shaper
 
 		if eval_reps > 1:
-			def _eval_fn(p: Params, k: jr.PRNGKey, tp: Optional[PyTree]=None, current_gen: int=0, env_state: Optional=None, noise: Optional=None):
+			def _eval_fn(p: Params, k: jr.PRNGKey, tp: Optional[PyTree]=None, current_gen: int=0, env_state: Optional=None, noise: Optional=None, env: Optional[PyTree]=None, env_params: Optional[dict]=None, static_env_params: Optional=None, init_env_state: Optional[str]=None):
 				"""
 				"""
 				eval_reps = 20
-				fit, info, policy_states, task_params, env_state = jax.vmap(task, in_axes=(None,0,None, None, None, None))(p, jr.split(k,eval_reps), tp, current_gen, env_state,  noise)
+				# If env is provided, pass it to the task; otherwise use default
+				if env is not None:
+					fit, info, policy_states, task_params, env_state = jax.vmap(task, in_axes=(None,0,None, None, None, None, None, None, None, None))(p, jr.split(k,eval_reps), tp, current_gen, env_state, noise, env, env_params, static_env_params, init_env_state)
+				else:
+					fit, info, policy_states, task_params, env_state = jax.vmap(task, in_axes=(None,0,None, None, None, None))(p, jr.split(k,eval_reps), tp, current_gen, env_state,  noise)
 				task_params = task_params[0]
 				env_state = jax.tree_map(lambda x: x[0, ...], env_state)
     
@@ -130,24 +134,29 @@ class EvosaxTrainer(BaseTrainer):
 
 	#-------------------------------------------------------------------
 
-	def eval(self, *args, **kwargs):
+	def eval(self, x: jax.Array, key: jax.Array, task_params: PyTree, current_gen: int, env_state: Optional=None, noise: Optional=None, env: Optional[PyTree]=None, env_params: Optional[dict]=None, static_env_params: Optional=None, init_env_state: Optional[str]=None):
 		
 		if self.n_devices == 1:
-			return self._eval(*args, **kwargs)
+			return self._eval(x, key, task_params, current_gen, env_state, noise, env=env, env_params=env_params, static_env_params=static_env_params, init_env_state=init_env_state)
 		if self.multi_device_mode=="shmap":
-			return self._eval_shmap(*args, **kwargs)
+			return self._eval_shmap(x, key, task_params)
 		elif self.multi_device_mode == "pmap":
-			return self._eval_pmap(*args, **kwargs)
+			return self._eval_pmap(x, key, task_params)
 		else:
 			raise ValueError(f"multi_device_mode {self.multi_device_mode} is not a valid mode")
 
 	#-------------------------------------------------------------------
 
-	def _eval(self, x: jax.Array, key: jax.Array, task_params: PyTree, current_gen: int, env_state: Optional=None, noise: Optional=None)->Tuple[jax.Array, PyTree]:
+	def _eval(self, x: jax.Array, key: jax.Array, task_params: PyTree, current_gen: int, env_state: Optional=None, noise: Optional=None, env: Optional[PyTree]=None, env_params: Optional[dict]=None, static_env_params: Optional=None, init_env_state: Optional[str]=None)->Tuple[jax.Array, PyTree]:
 		
 		params = self.params_shaper.reshape(x)
-		_eval = jax.vmap(self.task, in_axes=(0, None, None, None, 0, None ))
-		return _eval(params, key, task_params, current_gen, env_state, noise)
+		# If env is provided, pass it to the task; otherwise use the task's default
+		if env is not None:
+			_eval = jax.vmap(self.task, in_axes=(0, None, None, None, None, None, None, None, None, None))
+			return _eval(params, key, task_params, current_gen, env_state, noise, env, env_params, static_env_params, init_env_state)
+		else:
+			_eval = jax.vmap(self.task, in_axes=(0, None, None, None, 0, None))
+			return _eval(params, key, task_params, current_gen, env_state, noise)
 
 	#-------------------------------------------------------------------
 
@@ -180,14 +189,18 @@ class EvosaxTrainer(BaseTrainer):
 
 	#-------------------------------------------------------------------
 
-	def train_step(self, state: TrainState, key: jr.PRNGKey, task_params: Optional[TaskParams]=None, current_gen: int=0, env_state: Optional=None, noise: Optional=None) -> Tuple[TrainState, Data]:
+	def train_step(self, state: TrainState, key: jr.PRNGKey, task_params: Optional[TaskParams]=None, current_gen: int=0, env_state: Optional=None, noise: Optional=None, env: Optional[PyTree]=None, env_params: Optional[dict]=None, static_env_params: Optional=None, init_env_state: Optional[str]=None) -> Tuple[TrainState, Data]:
 		
 		ask_key, eval_key = jr.split(key, 2)
 		x, dummy_state = self.strategy.ask(ask_key, state, self.es_params)
 
 
 
-		fitness, eval_data, interm_policies, temp_task_paramsm, env_state = self.eval(x, eval_key, task_params, current_gen, env_state, noise)
+		fitness, eval_data, interm_policies, temp_task_paramsm, returned_env_state = self.eval(x, eval_key, task_params, current_gen, env_state, noise, env=env, env_params=env_params, static_env_params=static_env_params, init_env_state=init_env_state)
+  
+		# If task returns None for env_state, keep the input env_state to maintain pytree structure
+		# This is a concrete Python check, so it should work fine in JAX
+		output_env_state = env_state if returned_env_state is None else returned_env_state
   
 		features = eval_data["features"]
 		descriptors = jnp.swapaxes(features, 0, 1)  # (n_trials, pop_size, descriptor_dim)
@@ -221,7 +234,7 @@ class EvosaxTrainer(BaseTrainer):
 
 
 
-		return state, {"fitness": fitness, "behaviroral_diversity": avg_distance, "best_indiv": jnp.argmax(fitness), "data": eval_data, "interm_policies": interm_policies, "parameters": x, "fitness_all": f}, new_task_params, env_state
+		return state, {"fitness": fitness, "behaviroral_diversity": avg_distance, "best_indiv": jnp.argmax(fitness), "data": eval_data, "interm_policies": interm_policies, "parameters": x, "fitness_all": f}, new_task_params, output_env_state
 
 	#-------------------------------------------------------------------
 

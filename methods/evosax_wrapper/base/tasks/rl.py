@@ -30,6 +30,15 @@ EnvState: TypeAlias = PyTree
 Action: TypeAlias = jax.Array
 PolicyState: TypeAlias = PyTree
 
+
+from kinetix.environment.env import make_kinetix_env
+from kinetix.environment.ued.ued import make_reset_fn_from_config
+from kinetix.render import make_render_pixels
+from kinetix.util.config import normalise_config
+from methods.Kinetix.kinetix.util.saving import load_from_json_file
+
+
+
 class State(NamedTuple):
 	env_state: EnvState
 	policy_state: PolicyState
@@ -530,6 +539,100 @@ class MinatarMultiTask(eqx.Module):
 
 
 
+class _SingleKinetixTask(eqx.Module):
+    """Single Kinetix task instance for one environment"""
+    env: PyTree
+    statics: PyTree[...]
+    max_steps: int
+    env_params: dict
+    env_state: str
+    static_env_params: StaticEnvParams
+    data_fn: Callable[[PyTree], dict]
+    
+    def __init__(
+        self,
+        statics: PyTree[...],
+        env: PyTree,
+        env_params: dict,
+        env_state: str,
+        static_env_params: StaticEnvParams,
+        max_steps: int,
+        data_fn: Callable=lambda x: x):
+        self.statics = statics
+        self.env = env
+        self.env_params = env_params
+        self.env_state = env_state
+        self.static_env_params = static_env_params
+        self.max_steps = max_steps
+        self.data_fn = data_fn
+    
+    def __call__(
+        self, 
+        params: Params, 
+        key: jax.Array, 
+        task_params: Optional[TaskParams]=None,
+        current_gen: int=0,
+        env_state: Optional[EnvState]=None,
+        noise: Optional[jax.Array]=None)->Tuple[Float, PyTree]:
+        _, _, data, policy_states = self.rollout(params, key)
+        return jnp.sum(data["reward"]), data, policy_states, 0.0, None
+    
+    def initialize(self, key: jax.Array, target_function=None, current_task=0) -> EnvState:
+        obs, state = self.env.reset(key, env_params=self.env_params, override_reset_state=self.env_state)
+        return obs, state
+    
+    def rollout(
+        self, 
+        params: Params, 
+        key: jax.Array, 
+        task_params: Optional[TaskParams]=None)->Tuple[State, State, dict]:
+        init_env_key, init_policy_key, rollout_key = jr.split(key, 3)
+        policy = eqx.combine(params, self.statics)
+        
+        policy_state, policy_states = policy.initialize(init_policy_key)
+        obs, env_state = self.initialize(init_env_key)
+        dones = jnp.zeros(1, dtype=jnp.bool_)
+        
+        init_env_state = GymnaxState(env_state=env_state,  obs=obs,reward=0.0,done=dones)
+        init_state = State(env_state=init_env_state, policy_state=policy_state)
+        
+        obs_size = 20
+        action_size = 20
+        num_circles = int(self.static_env_params.num_circles)
+        num_polys = int(self.static_env_params.num_polygons)
+        num_joints = int(self.static_env_params.num_joints)
+        jax.debug.print("Static shapes -> circles: {}, polygons: {}, joints: {}", num_circles, num_polys, num_joints)
+        
+        def env_step(carry, x):
+            state, key = carry
+            key, _key = jr.split(key)
+            action, policy_state = policy(obs=state.env_state.obs, state=state.policy_state, done=dones, key=_key,obs_size=obs_size,action_size=action_size)
+            obs, env_state, reward,done,info = self.env.step(_key, state=state.env_state.env_state, action=action, env_params=self.env_params)
+            done = jnp.expand_dims(done, axis=0)
+            new_state = GymnaxState(env_state=env_state, obs=obs,reward=reward,done=done)
+            new_state = State(env_state=new_state, policy_state=policy_state)
+            
+            return [new_state, key], (state, action)
+        
+        [state, _], (states, actions) = jax.lax.scan(env_step, [init_state, rollout_key], None, self.max_steps)    
+        data = {"policy_states": states.policy_state, "obs": states.env_state.obs}
+        data = self.data_fn(data)
+        
+        data["reward"] = states.env_state.reward
+        any_done = jnp.any(states.env_state.done)
+        first_done = jnp.argmax(states.env_state.done)
+        
+        first_done = jnp.where(any_done, first_done, states.env_state.done.shape[0])
+        indexes = jnp.arange(states.env_state.reward.shape[0])
+        data["reward"] = jnp.where(indexes > first_done, 0, states.env_state.reward)
+        data["episode_length"] = first_done
+        
+        data["features"] = jnp.array([0])
+        data["actions"]  = actions
+        data["n_dormant"] = 0
+        return state, states, data, policy_states
+
+
 class KinetixTask(eqx.Module):
     """
     """
@@ -545,53 +648,60 @@ class KinetixTask(eqx.Module):
     action_size: int
     env_name: str
     env_params: dict
+    env_state: str
+    static_env_params: StaticEnvParams
     num_eval_trials: int
     #-------------------------------------------------------------------
     def __init__(
         self, 
         statics: PyTree[...],
-        env: Union[str, PyTree],
+        env: Union[str, list, PyTree],
         max_steps: int,
         backend: str="mjx",
         data_fn: Callable=lambda x: x, 
         env_kwargs: dict={}):
         
-        with open("scripts/train/evosax/kinetix_config.yaml", "r") as f:
-            config = yaml.load(f, Loader=yaml.SafeLoader)
-            
-        config = normalise_config(config, name="PPO")
-        print(env)
-
-        #observation_type = ObservationType.from_string(config["observation_type"])
-        #action_type = ActionType.from_string(config["action_type"])
-        env_state, static_env_params, self.env_params= load_from_json_file(env)
-        #self.env_params, static_env_params = generate_params_from_config(config)
-        config["env_params"] = to_state_dict(self.env_params)
-        config["static_env_params"] = to_state_dict(static_env_params)
-
-        reset_fn = make_reset_fn_from_config(config, self.env_params, static_env_params)
-        self.env = make_kinetix_env(
-                                                observation_type=config["observation_type"],
-                                                action_type=config["action_type"],
-                                                reset_fn=reset_fn,
-                                                env_params=self.env_params,
-                                                static_env_params=static_env_params)
+        # Handle both single env (str) and multiple envs (list)
+        if isinstance(env, str):
+            env_name = env
+            env_list = [env]
+        else:
+            env_list = env
+            env_name = env_list[0] if len(env_list) > 0 else ""
         
-        self.num_eval_trials = 10
-
+        # Create first environment for backward compatibility (not actually used)
+        with open("scripts/train/evosax/kinetix_config_pixels.yaml", "r") as f:
+            config = yaml.load(f, Loader=yaml.SafeLoader)
+        config = normalise_config(config, name="PPO")
+        print(f"Loading Kinetix env (for compatibility): {env_name}")
+        
+        env_state, static_env_params, env_params = load_from_json_file(env_name)
+        config["env_params"] = to_state_dict(env_params)
+        config["static_env_params"] = to_state_dict(static_env_params)
+        
+        reset_fn = make_reset_fn_from_config(config, env_params, static_env_params)
+        env_obj = make_kinetix_env(
+            observation_type=config["observation_type"],
+            action_type=config["action_type"],
+            reset_fn=reset_fn,
+            env_params=env_params,
+            static_env_params=static_env_params)
+        
+        self.env = env_obj
+        self.env_name = env_name
+        self.env_params = env_params
+        self.env_state = env_state
+        self.static_env_params = static_env_params
+        
         self.statics = statics
         self.max_steps = max_steps
         self.data_fn = data_fn
         self.num_tasks = 1
         self.reward_for_solved = 9000
         self.current_task = 0
-        
-        self.env_name = env
-        #self.env_params = env_kwargs
-        
-        self.obs_size = 20 # dummy
+        self.num_eval_trials = 10
+        self.obs_size = 20  # dummy
         self.action_size = 20
-
 
     def __call__(
         self, 
@@ -600,81 +710,80 @@ class KinetixTask(eqx.Module):
         task_params: Optional[TaskParams]=None,
         current_gen: int=0,
         env_state: Optional[EnvState]=None,
-        noise: Optional[jax.Array]=None)->Tuple[Float, PyTree]:
-
-        _, _, data, policy_states = self.rollout(params, key)
+        noise: Optional[jax.Array]=None,
+        env: Optional[PyTree]=None,
+        env_params: Optional[dict]=None,
+        static_env_params: Optional[StaticEnvParams]=None,
+        init_env_state: Optional[str]=None)->Tuple[Float, PyTree]:
+        _, _, data, policy_states = self.rollout(params, key, task_params, env, env_params, static_env_params, init_env_state)
         return jnp.sum(data["reward"]), data, policy_states, 0.0, None
-
  
-    def initialize(self, key: jax.Array, target_function=None, current_task=0) -> EnvState:
-        obs, state = self.env.reset(key)
+    def initialize(
+        self, 
+        key: jax.Array, 
+        target_function=None, 
+        current_task=0,
+        env: Optional[PyTree]=None,
+        env_params: Optional[dict]=None,
+        init_env_state: Optional[str]=None) -> EnvState:
+        obs, state = env.reset(key, env_params=env_params, override_reset_state=init_env_state)
         return obs, state
 
+
+    
     def rollout(
         self, 
         params: Params, 
         key: jax.Array, 
-        task_params: Optional[TaskParams]=None)->Tuple[State, State, dict]:
-
+        task_params: Optional[TaskParams]=None,
+        env: Optional[PyTree]=None,
+        env_params: Optional[dict]=None,
+        static_env_params: Optional[StaticEnvParams]=None,
+        init_env_state: Optional[str]=None)->Tuple[State, State, dict]:
         init_env_key, init_policy_key, rollout_key = jr.split(key, 3)
         policy = eqx.combine(params, self.statics)
-
+        
         policy_state, policy_states = policy.initialize(init_policy_key)
-        obs, env_state = self.initialize(init_env_key)
+        obs, env_state_reset = env.reset(init_env_key, env_params=env_params, override_reset_state=init_env_state)
         dones = jnp.zeros(1, dtype=jnp.bool_)
-
-        init_env_state = GymnaxState(env_state=env_state,  obs=obs,reward=0.0,done=dones)
-        init_state = State(env_state=init_env_state, policy_state=policy_state)
-
+        
+        init_gymnax_state = GymnaxState(env_state=env_state_reset, obs=obs, reward=0.0, done=dones)
+        init_state = State(env_state=init_gymnax_state, policy_state=policy_state)
+        
         obs_size = 20
         action_size = 20
-
+        num_circles = int(static_env_params.num_circles)
+        num_polys = int(static_env_params.num_polygons)
+        num_joints = int(static_env_params.num_joints)
+        jax.debug.print("Static shapes -> circles: {}, polygons: {}, joints: {}", num_circles, num_polys, num_joints)
+        
         def env_step(carry, x):
             state, key = carry
             key, _key = jr.split(key)
-            action, policy_state = policy(obs=state.env_state.obs, state=state.policy_state, done=dones, key=_key,obs_size=obs_size,action_size=action_size)
-            obs, env_state, reward,done,info = self.env.step(_key, state=state.env_state.env_state, action=action, env_params=self.env_params)
+            action, policy_state = policy(obs=state.env_state.obs, state=state.policy_state, done=dones, key=_key, obs_size=obs_size, action_size=action_size)
+            obs, env_state_step, reward, done, info = env.step(_key, state=state.env_state.env_state, action=action, env_params=env_params)
             done = jnp.expand_dims(done, axis=0)
-            new_state = GymnaxState(env_state=env_state, obs=obs,reward=reward,done=done)
+            new_state = GymnaxState(env_state=env_state_step, obs=obs, reward=reward, done=done)
             new_state = State(env_state=new_state, policy_state=policy_state)
             
             return [new_state, key], (state, action)
-
-        [state, _], (states, actions) = jax.lax.scan(env_step, [init_state, rollout_key], None, self.max_steps)    
+        
+        [state, _], (states, actions) = jax.lax.scan(env_step, [init_state, rollout_key], None, self.max_steps)
         data = {"policy_states": states.policy_state, "obs": states.env_state.obs}
         data = self.data_fn(data)
         
         data["reward"] = states.env_state.reward
         any_done = jnp.any(states.env_state.done)
         first_done = jnp.argmax(states.env_state.done)
-
-
+        
         first_done = jnp.where(any_done, first_done, states.env_state.done.shape[0])
         indexes = jnp.arange(states.env_state.reward.shape[0])
         data["reward"] = jnp.where(indexes > first_done, 0, states.env_state.reward)
         data["episode_length"] = first_done
         
-        
-        def flatten_env_state_without_time(env_state):
-            leaves, _ = jax.tree_util.tree_flatten_with_path(env_state)
-            chunks = []
-            for path, leaf in leaves:
-                # last entry in the path corresponds to the field/key name
-                if isinstance(path[-1], jax.tree_util.GetAttrKey) and path[-1].name == "time":
-                    continue
-                if isinstance(path[-1], jax.tree_util.DictKey) and path[-1].key == "time":
-                    continue
-                chunks.append(leaf.reshape(leaf.shape[0], -1))
-            return jnp.concatenate(chunks, axis=1)
-        
-        
-        env_state = states.env_state.env_state  
-        features = flatten_env_state_without_time(env_state)
-        data["features"] = features.reshape(-1)
-        data["actions"]  = actions
-  
-        data["actions"]  = actions
-        data["n_dormant"] = 0 # we do not measure this for kinetix
+        data["features"] = jnp.array([0])
+        data["actions"] = actions
+        data["n_dormant"] = 0
         return state, states, data, policy_states
 
 
